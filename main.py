@@ -44,6 +44,11 @@ def save_stack_file(stack_id, data):
     with open(file_path, "w") as f:
         json.dump(data, f, indent=4)
 
+def ensure_stack_dir(stack_id: str):
+    stack_dir = os.path.join(DATA_DIR, stack_id)
+    os.makedirs(stack_dir, exist_ok=True)
+    return stack_dir
+
 # POST /stacks
 @app.post("/stacks")
 def create_stack(stack: Stack):
@@ -109,3 +114,20 @@ async def upload_inventory(stack_id: str, inventory: Dict):
         raise HTTPException(status_code=500, detail=f"Error saving inventory: {str(e)}")
     
     return {"message": f"Inventory for stack '{stack_id}' saved successfully", "path": inventory_path}
+
+@app.post("/stacks/{stack_id}/ssh_key")
+async def upload_ssh_key(stack_id: str, ssh_key: str):
+    # Ensure the stack directory exists
+    stack_dir = ensure_stack_dir(stack_id)
+    ssh_key_path = os.path.join(stack_dir, "ssh_private")
+
+    # Save the SSH key
+    try:
+        with open(ssh_key_path, "w") as f:
+            f.write(ssh_key)
+        # Set file permissions to 600
+        os.chmod(ssh_key_path, 0o600)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error saving SSH key: {str(e)}")
+    
+    return {"message": f"SSH key for stack '{stack_id}' saved successfully", "path": ssh_key_path}
