@@ -1,0 +1,19 @@
+Create Stack:
+
+curl -X POST "http://localhost:8443/stacks" \
+-H "Content-Type: application/json" \
+-d '{"stack_id": "stack_001", "enterprise_deployment_type": "standalone", "shc_cluster": false}'
+
+Retrieve Stack:
+
+curl -X GET "http://localhost:8443/stacks/stack_001"
+
+Delete Stack:
+
+curl -X DELETE "http://localhost:8443/stacks/stack_001"
+
+Submit inventory:
+
+curl -X POST "http://localhost:8443/inventory" \
+-H "Content-Type: application/json" \
+-d @inventory.json

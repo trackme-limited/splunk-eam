@@ -83,3 +83,28 @@ def delete_stack(stack_id: str):
         os.remove(file_path)
     
     return {"message": "Stack deleted successfully"}
+
+def ensure_stack_dir(stack_id: str):
+    stack_dir = os.path.join(DATA_DIR, stack_id)
+    os.makedirs(stack_dir, exist_ok=True)
+    return stack_dir
+
+@app.post("/stacks/{stack_id}/inventory")
+async def upload_inventory(stack_id: str, inventory: Dict):
+    # Ensure the stack exists
+    stack_dir = ensure_stack_dir(stack_id)
+    
+    # Convert inventory JSON to Ansible INI format
+    inventory_path = os.path.join(stack_dir, "inventory.ini")
+    try:
+        with open(inventory_path, "w") as f:
+            for group, group_data in inventory.items():
+                f.write(f"[{group}]\n")
+                for host, vars_dict in group_data.get("hosts", {}).items():
+                    vars_line = " ".join(f"{key}={value}" for key, value in vars_dict.items())
+                    f.write(f"{host} {vars_line}\n")
+                f.write("\n")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error saving inventory: {str(e)}")
+    
+    return {"message": f"Inventory for stack '{stack_id}' saved successfully", "path": inventory_path}
