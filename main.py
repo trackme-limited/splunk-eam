@@ -161,7 +161,8 @@ async def ansible_test(stack_id: str):
         command = [
             "ansible", "-m", "ping", "all",
             "-i", inventory_path,
-            "--private-key", ssh_key_path
+            "--private-key", ssh_key_path,
+            "-e", "ansible_ssh_extra_args='-o StrictHostKeyChecking=no'"
         ]
         result = subprocess.run(
             command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True

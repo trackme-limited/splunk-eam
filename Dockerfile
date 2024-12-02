@@ -23,5 +23,8 @@ RUN mkdir -p /app/data
 # Expose the port for the API
 EXPOSE 8443
 
+# Disable SSH strict host key checking for Ansible
+ENV ANSIBLE_SSH_ARGS="-o StrictHostKeyChecking=no"
+
 # Command to run the application
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8443"]
