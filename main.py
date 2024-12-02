@@ -169,7 +169,7 @@ async def ansible_test(stack_id: str):
         if result.returncode != 0:
             raise HTTPException(
                 status_code=500,
-                detail=f"Ansible command failed: {result.stderr.strip()}"
+                detail=f"Ansible command failed: {command} {result.stderr.strip()}"
             )
         return {"message": "Ansible ping test successful", "output": result.stdout.strip()}
     except Exception as e:

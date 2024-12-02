@@ -40,3 +40,9 @@ curl -X POST "http://localhost:8443/stacks/prd1-cluster/ssh_key" \
 -d '{"ssh_key_b64": "LS0tLS1CRUdJTiBQUklWQVRFIEtFWS0tLS0tCk..." }'
 
 base64 private_key > private_key.b64
+
+Ansible test:
+
+curl -X POST "http://localhost:8443/stacks/prd1-cluster/ansible_test"
+
+
