@@ -4,6 +4,7 @@ from typing import Dict
 import json
 import os
 import subprocess
+import base64
 
 app = FastAPI()
 
@@ -123,15 +124,19 @@ async def upload_inventory(stack_id: str, inventory: Dict):
     return {"message": f"Inventory for stack '{stack_id}' saved successfully", "path": inventory_path}
 
 @app.post("/stacks/{stack_id}/ssh_key")
-async def upload_ssh_key(stack_id: str, ssh_key: str):
+async def upload_ssh_key(stack_id: str, ssh_key_b64: str = Body(..., embed=True)):
     # Ensure the stack directory exists
     stack_dir = ensure_stack_dir(stack_id)
     ssh_key_path = os.path.join(stack_dir, "ssh_private")
 
-    # Save the SSH key
     try:
+        # Decode the Base64-encoded key
+        ssh_key = base64.b64decode(ssh_key_b64).decode("utf-8")
+
+        # Save the SSH key to a file
         with open(ssh_key_path, "w") as f:
             f.write(ssh_key)
+
         # Set file permissions to 600
         os.chmod(ssh_key_path, 0o600)
     except Exception as e:
