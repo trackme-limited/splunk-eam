@@ -20,6 +20,9 @@ COPY main.py .
 # Ensure data directory exists at runtime (in case it's empty locally)
 RUN mkdir -p /app/data
 
+# Temporary directory for Ansible
+RUN mkdir -p /app/data/ansible_tmp
+
 # Set permissions for deployer
 RUN chown -R deployer:deployer /app
 

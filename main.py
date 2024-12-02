@@ -169,9 +169,10 @@ async def upload_ssh_key(stack_id: str, ssh_key_b64: str = Body(..., embed=True)
     return {"message": f"SSH key for stack '{stack_id}' saved successfully", "path": ssh_key_path}
 
 @app.post("/stacks/{stack_id}/ansible_test")
+@app.post("/stacks/{stack_id}/ansible_test")
 async def ansible_test(stack_id: str):
     stack_dir, inventory_path, ssh_key_path = get_stack_paths(stack_id)
-    
+
     # Validate stack data
     if not os.path.exists(stack_dir):
         raise HTTPException(status_code=404, detail=f"Stack '{stack_id}' not found.")
@@ -179,6 +180,10 @@ async def ansible_test(stack_id: str):
         raise HTTPException(status_code=400, detail=f"Inventory file not found for stack '{stack_id}'.")
     if not os.path.exists(ssh_key_path):
         raise HTTPException(status_code=400, detail=f"SSH key not found for stack '{stack_id}'.")
+
+    # Temporary directory for Ansible
+    ansible_tmp_dir = os.path.join(DATA_DIR, "ansible_tmp")
+    os.makedirs(ansible_tmp_dir, exist_ok=True)
 
     # Run Ansible command
     try:
@@ -189,12 +194,19 @@ async def ansible_test(stack_id: str):
             "-e", "ansible_ssh_extra_args='-o StrictHostKeyChecking=no'"
         ]
         result = subprocess.run(
-            command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
+            command,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            env={
+                **os.environ,  # Keep existing environment variables
+                "ANSIBLE_LOCAL_TEMP": ansible_tmp_dir,
+            },
         )
         if result.returncode != 0:
             raise HTTPException(
                 status_code=500,
-                detail=f"Ansible command failed: {command} {result.stderr.strip()}"
+                detail=f"Ansible command failed: {result.stderr.strip()}"
             )
         return {"message": "Ansible ping test successful", "output": result.stdout.strip()}
     except Exception as e:
