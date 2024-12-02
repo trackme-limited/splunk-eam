@@ -57,6 +57,12 @@ def get_stack_paths(stack_id: str):
     ssh_key_path = os.path.join(stack_dir, "ssh_private")
     return stack_dir, inventory_path, ssh_key_path
 
+# GET /stacks
+@app.get("/stacks")
+def get_all_stacks():
+    main_data = load_main_file()
+    return {"stacks": main_data.get("stacks", [])}
+
 # POST /stacks
 @app.post("/stacks")
 def create_stack(stack: Stack):
@@ -103,6 +109,24 @@ def ensure_stack_dir(stack_id: str):
     os.makedirs(stack_dir, exist_ok=True)
     return stack_dir
 
+# GET /stacks/{stack_id}/inventory
+@app.get("/stacks/{stack_id}/inventory")
+async def get_inventory(stack_id: str):
+    stack_dir = ensure_stack_dir(stack_id)
+    inventory_path = os.path.join(stack_dir, "inventory.ini")
+    
+    if not os.path.exists(inventory_path):
+        raise HTTPException(status_code=404, detail="Inventory file not found.")
+
+    try:
+        with open(inventory_path, "r") as f:
+            inventory_data = f.read()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error reading inventory: {str(e)}")
+    
+    return {"stack_id": stack_id, "inventory": inventory_data}
+
+# POST /stacks/{stack_id}/inventory
 @app.post("/stacks/{stack_id}/inventory")
 async def upload_inventory(stack_id: str, inventory: Dict):
     # Ensure the stack exists
