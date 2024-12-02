@@ -32,3 +32,9 @@ curl -X POST "http://localhost:8443/stacks/stack_001/inventory" \
         }
     }
 }'
+
+Add SSH private key:
+
+curl -X POST "http://localhost:8443/stacks/stack_001/ssh_key" \
+-H "Content-Type: text/plain" \
+--data-binary @your_private_key_file
