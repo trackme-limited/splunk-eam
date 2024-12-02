@@ -1,5 +1,8 @@
 FROM python:3.12-slim
 
+# Create a non-root user named "deployer"
+RUN addgroup --system deployer && adduser --system --ingroup deployer deployer
+
 # Install dependencies
 RUN apt-get update && apt-get install -y \
     openssh-client \
@@ -19,6 +22,12 @@ COPY data/ ./data/
 
 # Ensure data directory exists at runtime (in case it's empty locally)
 RUN mkdir -p /app/data
+
+# Set permissions for deployer
+RUN chown -R deployer:deployer /data
+
+# Switch to the "deployer" user
+USER deployer
 
 # Expose the port for the API
 EXPOSE 8443
