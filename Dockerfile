@@ -17,14 +17,11 @@ RUN pip install -r requirements.txt
 # Copy the main application file
 COPY main.py .
 
-# Copy the data directory
-COPY data/ ./data/
-
 # Ensure data directory exists at runtime (in case it's empty locally)
 RUN mkdir -p /app/data
 
 # Set permissions for deployer
-RUN chown -R deployer:deployer /data
+RUN chown -R deployer:deployer /app
 
 # Switch to the "deployer" user
 USER deployer
