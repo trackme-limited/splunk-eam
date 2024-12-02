@@ -3,6 +3,7 @@ from pydantic import BaseModel
 from typing import Dict
 import json
 import os
+import subprocess
 
 app = FastAPI()
 
@@ -48,6 +49,12 @@ def ensure_stack_dir(stack_id: str):
     stack_dir = os.path.join(DATA_DIR, stack_id)
     os.makedirs(stack_dir, exist_ok=True)
     return stack_dir
+
+def get_stack_paths(stack_id: str):
+    stack_dir = os.path.join(DATA_DIR, stack_id)
+    inventory_path = os.path.join(stack_dir, "inventory.ini")
+    ssh_key_path = os.path.join(stack_dir, "ssh_private")
+    return stack_dir, inventory_path, ssh_key_path
 
 # POST /stacks
 @app.post("/stacks")
@@ -131,3 +138,36 @@ async def upload_ssh_key(stack_id: str, ssh_key: str):
         raise HTTPException(status_code=500, detail=f"Error saving SSH key: {str(e)}")
     
     return {"message": f"SSH key for stack '{stack_id}' saved successfully", "path": ssh_key_path}
+
+@app.post("/stacks/{stack_id}/ansible_test")
+async def ansible_test(stack_id: str):
+    stack_dir, inventory_path, ssh_key_path = get_stack_paths(stack_id)
+    
+    # Validate stack data
+    if not os.path.exists(stack_dir):
+        raise HTTPException(status_code=404, detail=f"Stack '{stack_id}' not found.")
+    if not os.path.exists(inventory_path):
+        raise HTTPException(status_code=400, detail=f"Inventory file not found for stack '{stack_id}'.")
+    if not os.path.exists(ssh_key_path):
+        raise HTTPException(status_code=400, detail=f"SSH key not found for stack '{stack_id}'.")
+
+    # Run Ansible command
+    try:
+        command = [
+            "ansible", "-m", "ping", "all",
+            "-i", inventory_path,
+            "--private-key", ssh_key_path
+        ]
+        result = subprocess.run(
+            command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
+        )
+        if result.returncode != 0:
+            raise HTTPException(
+                status_code=500,
+                detail=f"Ansible command failed: {result.stderr.strip()}"
+            )
+        return {"message": "Ansible ping test successful", "output": result.stdout.strip()}
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, detail=f"Error running Ansible test: {str(e)}"
+        )
