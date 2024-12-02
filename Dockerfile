@@ -5,7 +5,7 @@ RUN addgroup --system deployer && adduser --system --ingroup deployer deployer
 
 # Install dependencies
 RUN apt-get update && apt-get install -y \
-    openssh-client \
+    procps openssh-client \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
