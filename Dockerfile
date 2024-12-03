@@ -1,7 +1,7 @@
 FROM python:3.12-slim
 
 # Create a non-root user named "deployer"
-RUN addgroup --system deployer && adduser --system --ingroup deployer --home /home/deployer -m deployer deployer
+RUN addgroup --system deployer && adduser --system --ingroup deployer --home /home/deployer deployer deployer
 
 # Install dependencies
 RUN apt-get update && apt-get install -y \
