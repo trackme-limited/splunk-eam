@@ -107,6 +107,10 @@ def run_ansible_playbook(
         inventory_path,
         "-e",
         json.dumps(ansible_vars),
+        "-e",
+        "ansible_ssh_extra_args='-o StrictHostKeyChecking=no'",
+        "--private-key",
+        os.path.join(DATA_DIR, "ssh_private"),  # Path to private key
     ]
 
     if limit:
