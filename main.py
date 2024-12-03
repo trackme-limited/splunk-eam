@@ -57,6 +57,25 @@ def get_stack_paths(stack_id: str):
     ssh_key_path = os.path.join(stack_dir, "ssh_private")
     return stack_dir, inventory_path, ssh_key_path
 
+def get_indexes_file(stack_id: str):
+    stack_dir = ensure_stack_dir(stack_id)
+    indexes_file = os.path.join(stack_dir, "stack_indexes.json")
+    if not os.path.exists(indexes_file):
+        with open(indexes_file, "w") as f:
+            json.dump({}, f)
+    return indexes_file
+
+def load_indexes(stack_id: str):
+    indexes_file = get_indexes_file(stack_id)
+    with open(indexes_file, "r") as f:
+        return json.load(f)
+
+def save_indexes(stack_id: str, data: dict):
+    indexes_file = get_indexes_file(stack_id)
+    with open(indexes_file, "w") as f:
+        json.dump(data, f, indent=4)
+
+
 # GET /stacks
 @app.get("/stacks")
 def get_all_stacks():
@@ -213,3 +232,95 @@ async def ansible_test(stack_id: str):
         raise HTTPException(
             status_code=500, detail=f"Error running Ansible test: {str(e)}"
         )
+
+@app.get("/stacks/{stack_id}/indexes")
+async def get_indexes(stack_id: str):
+    indexes = load_indexes(stack_id)
+    return {"stack_id": stack_id, "indexes": indexes}
+
+@app.post("/stacks/{stack_id}/indexes")
+async def add_index(
+    stack_id: str,
+    name: str = Body(..., embed=True),
+    maxDataSizeMB: int = Body(None, embed=True),
+    datatype: str = Body(None, embed=True)
+):
+    # Validate inputs
+    if datatype not in [None, "event", "metric"]:
+        raise HTTPException(status_code=400, detail="Invalid datatype. Must be 'event' or 'metric'.")
+    
+    # Set defaults
+    maxDataSizeMB = maxDataSizeMB or 500 * 1024  # 500 GB in MB
+    datatype = datatype or "event"
+    
+    # Load and update indexes
+    indexes = load_indexes(stack_id)
+    if name in indexes:
+        raise HTTPException(status_code=400, detail="Index already exists.")
+    indexes[name] = {"maxDataSizeMB": maxDataSizeMB, "datatype": datatype}
+    save_indexes(stack_id, indexes)
+
+    # Prepare Ansible variables
+    stack_details = load_stack_file(stack_id)
+    file_path = (
+        "/opt/splunk/etc/shcluster/apps/001_splunk_aem/local/indexes.conf"
+        if stack_details["enterprise_deployment_type"] == "distributed"
+        else "/opt/splunk/etc/apps/001_splunk_aem/local/indexes.conf"
+    )
+    ansible_vars = {
+        "index_name": name,
+        "maxDataSizeMB": maxDataSizeMB,
+        "datatype": datatype,
+        "file_path": file_path,
+    }
+
+    # Run Ansible playbook
+    try:
+        command = [
+            "ansible-playbook", "add_index.yml",
+            "-e", json.dumps(ansible_vars)
+        ]
+        result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        if result.returncode != 0:
+            raise HTTPException(status_code=500, detail=f"Ansible playbook failed: {result.stderr.strip()}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error running Ansible playbook: {str(e)}")
+    
+    return {"message": "Index added successfully", "index": indexes[name]}
+
+@app.delete("/stacks/{stack_id}/indexes/{index_name}")
+async def delete_index(stack_id: str, index_name: str):
+    # Load indexes and validate
+    indexes = load_indexes(stack_id)
+    if index_name not in indexes:
+        raise HTTPException(status_code=404, detail="Index not found.")
+    
+    # Remove index
+    del indexes[index_name]
+    save_indexes(stack_id, indexes)
+
+    # Prepare Ansible variables
+    stack_details = load_stack_file(stack_id)
+    file_path = (
+        "/opt/splunk/etc/shcluster/apps/001_splunk_aem/local/indexes.conf"
+        if stack_details["enterprise_deployment_type"] == "distributed"
+        else "/opt/splunk/etc/apps/001_splunk_aem/local/indexes.conf"
+    )
+    ansible_vars = {
+        "index_name": index_name,
+        "file_path": file_path,
+    }
+
+    # Run Ansible playbook
+    try:
+        command = [
+            "ansible-playbook", "remove_index.yml",
+            "-e", json.dumps(ansible_vars)
+        ]
+        result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        if result.returncode != 0:
+            raise HTTPException(status_code=500, detail=f"Ansible playbook failed: {result.stderr.strip()}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error running Ansible playbook: {str(e)}")
+    
+    return {"message": "Index deleted successfully"}

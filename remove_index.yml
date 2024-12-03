@@ -1,0 +1,24 @@
+---
+- name: Remove Splunk index
+  hosts: ds1
+  become: yes
+  vars:
+    index_name: ""
+    file_path: ""
+  tasks:
+    - name: Ensure indexes.conf file exists
+      file:
+        path: "{{ file_path }}"
+        state: touch
+        owner: splunk
+        group: splunk
+        mode: "0644"
+
+    - name: Remove index stanza
+      ini_file:
+        path: "{{ file_path }}"
+        section: "{{ index_name }}"
+        state: absent
+        owner: splunk
+        group: splunk
+        mode: "0644"
