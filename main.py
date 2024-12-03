@@ -28,11 +28,12 @@ if not os.path.exists(MAIN_FILE):
         json.dump({"stacks": []}, f)
 
 
-# Model for stack metadata
 class Stack(BaseModel):
     stack_id: str
-    enterprise_deployment_type: str
+    enterprise_deployment_type: str  # "distributed" or "standalone"
     shc_cluster: bool
+    cluster_manager_node: str = None  # Optional unless distributed
+    shc_deployer_node: str = None  # Optional unless shc_cluster
 
 
 # Helper functions for the main file
@@ -95,6 +96,34 @@ def save_indexes(stack_id: str, data: dict):
         json.dump(data, f, indent=4)
 
 
+def run_ansible_playbook(playbook_name: str, ansible_vars: dict):
+    playbook_dir = "/app/ansible"
+    ansible_tmp_dir = os.path.join(DATA_DIR, "ansible_tmp")
+    os.makedirs(ansible_tmp_dir, exist_ok=True)
+
+    command = [
+        "ansible-playbook",
+        f"{playbook_dir}/{playbook_name}",
+        "-e",
+        json.dumps(ansible_vars),
+    ]
+    logger.debug(f"Running Ansible playbook: {command}")
+
+    result = subprocess.run(
+        command,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        env={**os.environ, "ANSIBLE_LOCAL_TEMP": ansible_tmp_dir},
+    )
+    logger.debug(f"Ansible stdout: {result.stdout}")
+    logger.error(f"Ansible stderr: {result.stderr}") if result.returncode != 0 else None
+    if result.returncode != 0:
+        raise HTTPException(
+            status_code=500, detail=f"Ansible playbook failed: {result.stderr.strip()}"
+        )
+
+
 # Add logging middleware to capture API requests
 @app.middleware("http")
 async def log_requests(request, call_next):
@@ -114,17 +143,32 @@ def get_all_stacks():
 # POST /stacks
 @app.post("/stacks")
 def create_stack(stack: Stack):
+    # Validate cluster manager node for distributed deployment
+    if (
+        stack.enterprise_deployment_type == "distributed"
+        and not stack.cluster_manager_node
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail="cluster_manager_node is required for distributed deployments.",
+        )
+
+    # Validate SHC deployer node if SHC cluster is true
+    if stack.shc_cluster and not stack.shc_deployer_node:
+        raise HTTPException(
+            status_code=400,
+            detail="shc_deployer_node is required for SHC cluster setups.",
+        )
+
+    # Save stack data
     main_data = load_main_file()
     if stack.stack_id in [s["stack_id"] for s in main_data["stacks"]]:
         raise HTTPException(status_code=400, detail="Stack ID already exists.")
 
-    # Add to main file
-    main_data["stacks"].append({"stack_id": stack.stack_id})
+    main_data["stacks"].append(stack.dict())
     save_main_file(main_data)
 
-    # Create individual stack file
     save_stack_file(stack.stack_id, stack.dict())
-
     return {"message": "Stack created successfully", "stack": stack.dict()}
 
 
@@ -345,166 +389,27 @@ async def add_index(
     }
 
     if stack_details["enterprise_deployment_type"] == "distributed":
+        # Push to cluster manager
+        ansible_vars["target_node"] = stack_details["cluster_manager_node"]
+        ansible_vars["file_path"] = (
+            "/opt/splunk/etc/manager-apps/001_splunk_aem/local/indexes.conf"
+        )
+        run_ansible_playbook("add_index.yml", ansible_vars)
 
-        logger.info("Running add index for distributed.")
-
-        #
-        # push to cluster manager
-        #
-
-        # set target node
-        ansible_vars["target_node"] = "cm1"
-
-        # set file path for cluster manager
-        file_path = "/opt/splunk/etc/manager-apps/001_splunk_aem/local/indexes.conf"
-        ansible_vars["file_path"] = file_path
-
-        # Run Ansible playbook
-        playbook_dir = "/app/ansible"
-
-        logger.info("Running Ansible command to add index on the cluster manager.")
-        try:
-            command = [
-                "ansible-playbook",
-                f"{playbook_dir}/add_index.yml",
-                "-e",
-                json.dumps(ansible_vars),
-            ]
-            logger.debug(f"Command: {' '.join(command)}")
-            result = subprocess.run(
-                command,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True,
-                env={
-                    **os.environ,  # Keep existing environment variables
-                    "ANSIBLE_LOCAL_TEMP": ansible_tmp_dir,
-                },
+        # Push to SHC if enabled
+        if stack_details["shc_cluster"]:
+            ansible_vars["target_node"] = stack_details["shc_deployer_node"]
+            ansible_vars["file_path"] = (
+                "/opt/splunk/etc/shcluster/apps/001_splunk_aem/local/indexes.conf"
             )
-            logger.debug(f"Ansible stdout: {result.stdout}")
-            (
-                logger.error(f"Ansible stderr: {result.stderr}")
-                if result.returncode != 0
-                else None
-            )
-            if result.returncode != 0:
-                raise HTTPException(
-                    status_code=500,
-                    detail=f"Ansible playbook failed: {result.stderr.strip()}",
-                )
-        except Exception as e:
-            logger.exception("Error running Ansible playbook")
-            raise HTTPException(
-                status_code=500, detail=f"Error running Ansible playbook: {str(e)}"
-            )
-
-        #
-        # push to SHC
-        #
-
-        # set target node
-        ansible_vars["target_node"] = "ds1"
-
-        # set file path for SHC
-        file_path = "/opt/splunk/etc/shcluster/apps/001_splunk_aem/local/indexes.conf"
-        ansible_vars["file_path"] = file_path
-
-        logger.info("Running Ansible command to add index on the SHC deployer.")
-
-        # Run Ansible playbook
-        playbook_dir = "/app/ansible"
-        try:
-            command = [
-                "ansible-playbook",
-                f"{playbook_dir}/add_index.yml",
-                "-e",
-                json.dumps(ansible_vars),
-            ]
-            logger.debug(f"Command: {' '.join(command)}")
-            result = subprocess.run(
-                command,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True,
-                env={
-                    **os.environ,  # Keep existing environment variables
-                    "ANSIBLE_LOCAL_TEMP": ansible_tmp_dir,
-                },
-            )
-            logger.debug(f"Ansible stdout: {result.stdout}")
-            (
-                logger.error(f"Ansible stderr: {result.stderr}")
-                if result.returncode != 0
-                else None
-            )
-            if result.returncode != 0:
-                raise HTTPException(
-                    status_code=500,
-                    detail=f"Ansible playbook failed: {result.stderr.strip()}",
-                )
-        except Exception as e:
-            logger.exception("Error running Ansible playbook")
-            raise HTTPException(
-                status_code=500, detail=f"Error running Ansible playbook: {str(e)}"
-            )
-
+            run_ansible_playbook("add_index.yml", ansible_vars)
     else:
-
-        #
-        # push to standalone
-        #
-
-        logger.info("Running add index for standalone.")
-
-        # set target node
-        ansible_vars["target_node"] = "standalone"
-
-        # set file path for standalone
-        file_path = "/opt/splunk/etc/apps/001_splunk_aem/local/indexes.conf"
-        ansible_vars = {
-            "target_node": "standalone",
-            "index_name": name,
-            "maxDataSizeMB": maxDataSizeMB,
-            "datatype": datatype,
-            "file_path": file_path,
-        }
-
-        # Run Ansible playbook
-        playbook_dir = "/app/ansible"
-        try:
-            command = [
-                "ansible-playbook",
-                f"{playbook_dir}/add_index.yml",
-                "-e",
-                json.dumps(ansible_vars),
-            ]
-            logger.debug(f"Command: {' '.join(command)}")
-            result = subprocess.run(
-                command,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True,
-                env={
-                    **os.environ,  # Keep existing environment variables
-                    "ANSIBLE_LOCAL_TEMP": ansible_tmp_dir,
-                },
-            )
-            logger.debug(f"Ansible stdout: {result.stdout}")
-            (
-                logger.error(f"Ansible stderr: {result.stderr}")
-                if result.returncode != 0
-                else None
-            )
-            if result.returncode != 0:
-                raise HTTPException(
-                    status_code=500,
-                    detail=f"Ansible playbook failed: {result.stderr.strip()}",
-                )
-        except Exception as e:
-            logger.exception("Error running Ansible playbook")
-            raise HTTPException(
-                status_code=500, detail=f"Error running Ansible playbook: {str(e)}"
-            )
+        # Standalone
+        ansible_vars["target_node"] = "all"
+        ansible_vars["file_path"] = (
+            "/opt/splunk/etc/apps/001_splunk_aem/local/indexes.conf"
+        )
+        run_ansible_playbook("add_index.yml", ansible_vars)
 
     return {"message": "Index added successfully", "index": indexes[name]}
 
