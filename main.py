@@ -34,6 +34,7 @@ class Stack(BaseModel):
     shc_cluster: bool
     cluster_manager_node: str = None  # Optional unless distributed
     shc_deployer_node: str = None  # Optional unless shc_cluster
+    ansible_python_interpreter: str = "/usr/bin/python3"  # Default Python interpreter
 
 
 # Helper functions for the main file
@@ -134,6 +135,17 @@ def run_ansible_playbook(
 
     if limit:
         command.extend(["--limit", limit])  # Add --limit option if specified
+
+    # Retrieve the stack details to get the Python interpreter
+    if stack_id:
+        stack_details = load_stack_file(stack_id)
+        ansible_python_interpreter = stack_details.get(
+            "ansible_python_interpreter", "/usr/bin/python3"
+        )
+        # Include the Python interpreter variable
+        command.extend(
+            ["-e", f"ansible_python_interpreter={ansible_python_interpreter}"]
+        )
 
     logger.debug(f"Running Ansible playbook: {command}")
 

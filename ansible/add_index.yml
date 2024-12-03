@@ -8,6 +8,14 @@
     datatype: ""
     file_path: ""
   tasks:
+    - name: Ensure directory exists for indexes.conf
+      file:
+        path: "{{ file_path | dirname }}"
+        state: directory
+        owner: splunk
+        group: splunk
+        mode: "0755"
+
     - name: Ensure indexes.conf file exists
       file:
         path: "{{ file_path }}"
