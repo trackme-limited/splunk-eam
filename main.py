@@ -104,7 +104,6 @@ def run_ansible_playbook(
     ansible_vars: dict = None,
     limit: str = None,
 ):
-
     stack_dir, inventory_path, ssh_key_path = get_stack_paths(stack_id)
     creds_file_path = os.path.join(stack_dir, "splunk_creds.json")
 
@@ -119,11 +118,25 @@ def run_ansible_playbook(
         raise HTTPException(
             status_code=400, detail=f"SSH key not found for stack '{stack_id}'."
         )
-    # Ensure the credentials file exists
-    if not os.path.exists(creds_file_path):
-        raise HTTPException(
-            status_code=400,
-            detail=f"Splunk credentials not found for stack '{stack_id}'. Please add them using the /splunk_credentials endpoint.",
+
+    # Ensure the credentials file exists if required
+    if "apply_cluster_bundle" in playbook_name or "apply_shc_bundle" in playbook_name:
+        if not os.path.exists(creds_file_path):
+            raise HTTPException(
+                status_code=400,
+                detail=f"Splunk credentials not found for stack '{stack_id}'. Please add them using the /splunk_credentials endpoint.",
+            )
+
+        # Inject credentials into ansible_vars
+        with open(creds_file_path, "r") as creds_file:
+            creds = json.load(creds_file)
+        if ansible_vars is None:
+            ansible_vars = {}
+        ansible_vars.update(
+            {
+                "splunk_username": creds["username"],
+                "splunk_password": creds["password"],
+            }
         )
 
     playbook_dir = "/app/ansible"
