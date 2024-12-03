@@ -100,9 +100,6 @@ def run_ansible_playbook(
     playbook_name: str, ansible_vars: dict, inventory_path: str, limit: str = None
 ):
     playbook_dir = "/app/ansible"
-    ansible_tmp_dir = os.path.join(DATA_DIR, "ansible_tmp")
-    os.makedirs(ansible_tmp_dir, exist_ok=True)
-
     command = [
         "ansible-playbook",
         f"{playbook_dir}/{playbook_name}",
@@ -122,7 +119,6 @@ def run_ansible_playbook(
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         text=True,
-        env={**os.environ, "ANSIBLE_LOCAL_TEMP": ansible_tmp_dir},
     )
     logger.debug(f"Ansible stdout: {result.stdout}")
     if result.returncode != 0:
@@ -301,10 +297,6 @@ async def ansible_test(stack_id: str):
             status_code=400, detail=f"SSH key not found for stack '{stack_id}'."
         )
 
-    # Temporary directory for Ansible
-    ansible_tmp_dir = os.path.join(DATA_DIR, "ansible_tmp")
-    os.makedirs(ansible_tmp_dir, exist_ok=True)
-
     # Run Ansible command
     try:
         command = [
@@ -324,10 +316,6 @@ async def ansible_test(stack_id: str):
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
-            env={
-                **os.environ,  # Keep existing environment variables
-                "ANSIBLE_LOCAL_TEMP": ansible_tmp_dir,
-            },
         )
         logger.debug(f"Ansible stdout: {result.stdout}")
         (
@@ -379,10 +367,6 @@ async def add_index(
         raise HTTPException(status_code=400, detail="Index already exists.")
     indexes[name] = {"maxDataSizeMB": maxDataSizeMB, "datatype": datatype}
     save_indexes(stack_id, indexes)
-
-    # Temporary directory for Ansible
-    ansible_tmp_dir = os.path.join(DATA_DIR, "ansible_tmp")
-    os.makedirs(ansible_tmp_dir, exist_ok=True)
 
     # Prepare Ansible variables
     stack_details = load_stack_file(stack_id)
