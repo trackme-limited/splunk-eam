@@ -129,7 +129,7 @@ def run_ansible_playbook(
         "-e",
         "ansible_ssh_extra_args='-o StrictHostKeyChecking=no'",
         "--private-key",
-        os.path.join(DATA_DIR, "ssh_private"),  # Path to private key
+        ssh_key_path,
     ]
 
     if limit:
