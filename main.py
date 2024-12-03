@@ -411,9 +411,9 @@ async def add_index(
 
     ansible_vars = {
         "target_node": "",
-        "index_name": str(name),
-        "maxDataSizeMB": str(maxDataSizeMB),
-        "datatype": str(datatype),
+        "index_name": name,
+        "maxDataSizeMB": maxDataSizeMB,
+        "datatype": datatype,
         "file_path": "",
     }
 

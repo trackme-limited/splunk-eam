@@ -24,14 +24,23 @@
         group: splunk
         mode: "0644"
 
-    - name: Add or update index stanza
+    - name: Add or update index stanza (maxDataSizeMB)
       ini_file:
         path: "{{ file_path }}"
         section: "{{ index_name }}"
-        option:
-          maxDataSizeMB: "{{ maxDataSizeMB }}"
-          datatype: "{{ datatype }}"
-        allow_no_value: true
+        option: maxDataSizeMB
+        value: "{{ maxDataSizeMB }}"
+        state: present
+        owner: splunk
+        group: splunk
+        mode: "0644"
+
+    - name: Add or update index stanza (datatype)
+      ini_file:
+        path: "{{ file_path }}"
+        section: "{{ index_name }}"
+        option: datatype
+        value: "{{ datatype }}"
         state: present
         owner: splunk
         group: splunk
