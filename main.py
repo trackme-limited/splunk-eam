@@ -317,7 +317,7 @@ async def add_index(
         "index_name": name,
         "maxDataSizeMB": maxDataSizeMB,
         "datatype": datatype,
-        "file_path": file_path,
+        "file_path": "",
     }
 
     if stack_details["enterprise_deployment_type"] == "distributed":
