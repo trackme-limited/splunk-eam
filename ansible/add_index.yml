@@ -1,6 +1,6 @@
 ---
 - name: Add Splunk index
-  hosts: "{{ target_node }}"
+  hosts: all
   become: yes
   vars:
     index_name: ""

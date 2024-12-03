@@ -96,7 +96,9 @@ def save_indexes(stack_id: str, data: dict):
         json.dump(data, f, indent=4)
 
 
-def run_ansible_playbook(playbook_name: str, ansible_vars: dict):
+def run_ansible_playbook(
+    playbook_name: str, ansible_vars: dict, inventory_path: str, limit: str = None
+):
     playbook_dir = "/app/ansible"
     ansible_tmp_dir = os.path.join(DATA_DIR, "ansible_tmp")
     os.makedirs(ansible_tmp_dir, exist_ok=True)
@@ -104,9 +106,15 @@ def run_ansible_playbook(playbook_name: str, ansible_vars: dict):
     command = [
         "ansible-playbook",
         f"{playbook_dir}/{playbook_name}",
+        "-i",
+        inventory_path,
         "-e",
         json.dumps(ansible_vars),
     ]
+
+    if limit:
+        command.extend(["--limit", limit])  # Add --limit option if specified
+
     logger.debug(f"Running Ansible playbook: {command}")
 
     result = subprocess.run(
@@ -117,8 +125,8 @@ def run_ansible_playbook(playbook_name: str, ansible_vars: dict):
         env={**os.environ, "ANSIBLE_LOCAL_TEMP": ansible_tmp_dir},
     )
     logger.debug(f"Ansible stdout: {result.stdout}")
-    logger.error(f"Ansible stderr: {result.stderr}") if result.returncode != 0 else None
     if result.returncode != 0:
+        logger.error(f"Ansible stderr: {result.stderr}")
         raise HTTPException(
             status_code=500, detail=f"Ansible playbook failed: {result.stderr.strip()}"
         )
@@ -278,7 +286,6 @@ async def upload_ssh_key(stack_id: str, ssh_key_b64: str = Body(..., embed=True)
 
 
 @app.post("/stacks/{stack_id}/ansible_test")
-@app.post("/stacks/{stack_id}/ansible_test")
 async def ansible_test(stack_id: str):
     stack_dir, inventory_path, ssh_key_path = get_stack_paths(stack_id)
 
@@ -380,6 +387,9 @@ async def add_index(
     # Prepare Ansible variables
     stack_details = load_stack_file(stack_id)
 
+    # Get the inventory path
+    _, inventory_path, _ = get_stack_paths(stack_id)
+
     ansible_vars = {
         "target_node": "",
         "index_name": name,
@@ -394,7 +404,12 @@ async def add_index(
         ansible_vars["file_path"] = (
             "/opt/splunk/etc/manager-apps/001_splunk_aem/local/indexes.conf"
         )
-        run_ansible_playbook("add_index.yml", ansible_vars)
+        run_ansible_playbook(
+            "add_index.yml",
+            ansible_vars,
+            inventory_path,
+            stack_details["cluster_manager_node"],
+        )
 
         # Push to SHC if enabled
         if stack_details["shc_cluster"]:
@@ -402,14 +417,19 @@ async def add_index(
             ansible_vars["file_path"] = (
                 "/opt/splunk/etc/shcluster/apps/001_splunk_aem/local/indexes.conf"
             )
-            run_ansible_playbook("add_index.yml", ansible_vars)
+            run_ansible_playbook(
+                "add_index.yml",
+                ansible_vars,
+                inventory_path,
+                stack_details["cluster_manager_node"],
+            )
     else:
         # Standalone
         ansible_vars["target_node"] = "all"
         ansible_vars["file_path"] = (
             "/opt/splunk/etc/apps/001_splunk_aem/local/indexes.conf"
         )
-        run_ansible_playbook("add_index.yml", ansible_vars)
+        run_ansible_playbook("add_index.yml", ansible_vars, inventory_path, "all")
 
     return {"message": "Index added successfully", "index": indexes[name]}
 
@@ -437,44 +457,37 @@ async def delete_index(stack_id: str, index_name: str):
         "file_path": file_path,
     }
 
-    # Temporary directory for Ansible
-    ansible_tmp_dir = os.path.join(DATA_DIR, "ansible_tmp")
-    os.makedirs(ansible_tmp_dir, exist_ok=True)
+    # Get the inventory path
+    _, inventory_path, _ = get_stack_paths(stack_id)
 
-    # Run Ansible playbook
-    playbook_dir = "/app/ansible"
-    try:
-        command = [
-            "ansible-playbook",
-            f"{playbook_dir}/remove_index.yml",
-            "-e",
-            json.dumps(ansible_vars),
-        ]
-        result = subprocess.run(
-            command,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-            env={
-                **os.environ,  # Keep existing environment variables
-                "ANSIBLE_LOCAL_TEMP": ansible_tmp_dir,
-            },
+    if stack_details["enterprise_deployment_type"] == "distributed":
+        # Remove from cluster manager
+        ansible_vars["file_path"] = (
+            "/opt/splunk/etc/manager-apps/001_splunk_aem/local/indexes.conf"
         )
-        logger.debug(f"Ansible stdout: {result.stdout}")
-        (
-            logger.error(f"Ansible stderr: {result.stderr}")
-            if result.returncode != 0
-            else None
+        run_ansible_playbook(
+            "remove_index.yml",
+            ansible_vars,
+            inventory_path,
+            stack_details["cluster_manager_node"],
         )
-        if result.returncode != 0:
-            raise HTTPException(
-                status_code=500,
-                detail=f"Ansible playbook failed: {result.stderr.strip()}",
+
+        # Remove from SHC deployer if enabled
+        if stack_details["shc_cluster"]:
+            ansible_vars["file_path"] = (
+                "/opt/splunk/etc/shcluster/apps/001_splunk_aem/local/indexes.conf"
             )
-    except Exception as e:
-        logger.exception("Error running Ansible playbook")
-        raise HTTPException(
-            status_code=500, detail=f"Error running Ansible playbook: {str(e)}"
+            run_ansible_playbook(
+                "remove_index.yml",
+                ansible_vars,
+                inventory_path,
+                stack_details["shc_deployer_node"],
+            )
+    else:
+        # Standalone deployment
+        ansible_vars["file_path"] = (
+            "/opt/splunk/etc/apps/001_splunk_aem/local/indexes.conf"
         )
+        run_ansible_playbook("remove_index.yml", ansible_vars, inventory_path, "all")
 
     return {"message": "Index deleted successfully"}

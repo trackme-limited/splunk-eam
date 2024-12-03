@@ -1,6 +1,6 @@
 ---
 - name: Remove Splunk index
-  hosts: ds1
+  hosts: all
   become: yes
   vars:
     index_name: ""
