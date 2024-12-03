@@ -29,8 +29,9 @@
         path: "{{ file_path }}"
         section: "{{ index_name }}"
         option:
-          maxDataSizeMB: "{{ maxDataSizeMB }}"
-          datatype: "{{ datatype }}"
+          - { name: maxDataSizeMB, value: "{{ maxDataSizeMB }}" }
+          - { name: datatype, value: "{{ datatype }}" }
+        state: present
         owner: splunk
         group: splunk
         mode: "0644"
