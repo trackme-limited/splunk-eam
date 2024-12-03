@@ -275,9 +275,10 @@ async def add_index(
     }
 
     # Run Ansible playbook
+    playbook_dir = "/app/ansible"
     try:
         command = [
-            "ansible-playbook", "add_index.yml",
+            "ansible-playbook", f"{playbook_dir}/add_index.yml",
             "-e", json.dumps(ansible_vars)
         ]
         result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
@@ -312,9 +313,10 @@ async def delete_index(stack_id: str, index_name: str):
     }
 
     # Run Ansible playbook
+    playbook_dir = "/app/ansible"
     try:
         command = [
-            "ansible-playbook", "remove_index.yml",
+            "ansible-playbook", f"{playbook_dir}/remove_index.yml",
             "-e", json.dumps(ansible_vars)
         ]
         result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)

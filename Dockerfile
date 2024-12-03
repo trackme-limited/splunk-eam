@@ -16,6 +16,7 @@ RUN pip install -r requirements.txt
 
 # Copy the main application file
 COPY main.py .
+COPY ansible/ /app/ansible/
 
 # Ensure data directory exists at runtime (in case it's empty locally)
 RUN mkdir -p /app/data
