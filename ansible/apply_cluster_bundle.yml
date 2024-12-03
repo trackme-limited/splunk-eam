@@ -9,27 +9,19 @@
     creds_file: ""
 
   tasks:
-    - name: Read Splunk credentials
-      slurp:
-        src: "{{ creds_file }}"
-      register: creds_content
-
-    - name: Parse credentials
-      set_fact:
-        splunk_creds: "{{ creds_content.content | b64decode | from_json }}"
-
     - name: Apply cluster bundle
       shell: >
         {{ splunk_home }}/bin/splunk apply cluster-bundle
         -uri https://{{ cluster_manager_node }}:{{ splunk_port }}
         --answer-yes
-        -auth '{{ splunk_creds.username }}:{{ splunk_creds.password }}'
+        -auth '{{ splunk_username }}:{{ splunk_password }}'
       become_user: splunk
       register: cmbundle_apply_result
 
     - name: Display cluster apply bundle results (stdout)
       debug:
         msg: "{{ cmbundle_apply_result.stdout.split('\n') }}"
+      ignore_errors: yes
 
     - name: Display cluster apply bundle results (stderr)
       debug:
