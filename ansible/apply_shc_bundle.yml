@@ -1,0 +1,42 @@
+---
+- name: Apply SHC Bundle
+  hosts: all
+  become: yes
+  vars:
+    splunk_home: "/opt/splunk"
+    splunk_port: "8089"
+    creds_file: ""
+    shc_deployer_node: ""
+
+  tasks:
+    - name: Read Splunk credentials
+      slurp:
+        src: "{{ creds_file }}"
+      register: creds_content
+
+    - name: Parse credentials
+      set_fact:
+        splunk_creds: "{{ creds_content.content | b64decode | from_json }}"
+
+    - name: Get SHC status
+      shell: >
+        {{ splunk_home }}/bin/splunk show shcluster-status
+        -auth '{{ splunk_creds.username }}:{{ splunk_creds.password }}'
+      register: shcluster_status
+
+    - name: Parse SHC captain
+      set_fact:
+        shc_captain: "{{ shcluster_status.stdout | regex_search('label : (.+)', '\\1') }}"
+
+    - name: Apply SHC bundle
+      shell: >
+        {{ splunk_home }}/bin/splunk apply shcluster-bundle
+        -target https://{{ shc_captain }}:{{ splunk_port }}
+        --answer-yes
+        -auth '{{ splunk_creds.username }}:{{ splunk_creds.password }}'
+      become_user: splunk
+      register: shbundle_apply_result
+
+    - name: Display SHC bundle apply results (stdout)
+      debug:
+        msg: "{{ shbundle_apply_result.stdout.split('\n') }}"

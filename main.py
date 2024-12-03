@@ -100,12 +100,13 @@ def save_indexes(stack_id: str, data: dict):
 def run_ansible_playbook(
     stack_id: str,
     playbook_name: str,
-    ansible_vars: dict,
     inventory_path: str,
+    ansible_vars: dict = None,
     limit: str = None,
 ):
 
     stack_dir, inventory_path, ssh_key_path = get_stack_paths(stack_id)
+    creds_file_path = os.path.join(stack_dir, "splunk_creds.json")
 
     # Validate stack data
     if not os.path.exists(stack_dir):
@@ -117,6 +118,12 @@ def run_ansible_playbook(
     if not os.path.exists(ssh_key_path):
         raise HTTPException(
             status_code=400, detail=f"SSH key not found for stack '{stack_id}'."
+        )
+    # Ensure the credentials file exists
+    if not os.path.exists(creds_file_path):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Splunk credentials not found for stack '{stack_id}'. Please add them using the /splunk_credentials endpoint.",
         )
 
     playbook_dir = "/app/ansible"
@@ -316,9 +323,31 @@ async def upload_ssh_key(stack_id: str, ssh_key_b64: str = Body(..., embed=True)
     }
 
 
+@app.post("/stacks/{stack_id}/splunk_credentials")
+async def set_splunk_credentials(
+    stack_id: str, username: str = Body(...), password: str = Body(...)
+):
+    # Ensure stack exists
+    stack_dir = ensure_stack_dir(stack_id)
+    creds_path = os.path.join(stack_dir, "splunk_creds.json")
+
+    # Store credentials securely
+    try:
+        creds = {"username": username, "password": password}
+        with open(creds_path, "w") as f:
+            json.dump(creds, f)
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, detail=f"Error saving credentials: {str(e)}"
+        )
+
+    return {"message": f"Credentials saved for stack '{stack_id}'"}
+
+
 @app.post("/stacks/{stack_id}/ansible_test")
 async def ansible_test(stack_id: str):
     stack_dir, inventory_path, ssh_key_path = get_stack_paths(stack_id)
+    creds_file_path = os.path.join(stack_dir, "splunk_creds.json")
 
     # Validate stack data
     if not os.path.exists(stack_dir):
@@ -330,6 +359,12 @@ async def ansible_test(stack_id: str):
     if not os.path.exists(ssh_key_path):
         raise HTTPException(
             status_code=400, detail=f"SSH key not found for stack '{stack_id}'."
+        )
+    # Ensure the credentials file exists
+    if not os.path.exists(creds_file_path):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Splunk credentials not found for stack '{stack_id}'. Please add them using the /splunk_credentials endpoint.",
         )
 
     # Run Ansible command
@@ -426,9 +461,17 @@ async def add_index(
         run_ansible_playbook(
             stack_id,
             "add_index.yml",
-            ansible_vars,
             inventory_path,
-            stack_details["cluster_manager_node"],
+            ansible_vars=ansible_vars,
+            limit=stack_details["cluster_manager_node"],
+        )
+
+        # Apply cluster bundle
+        run_ansible_playbook(
+            stack_id,
+            "apply_cluster_bundle.yml",
+            inventory_path,
+            limit=stack_details["cluster_manager_node"],
         )
 
         # Push to SHC if enabled
@@ -440,10 +483,20 @@ async def add_index(
             run_ansible_playbook(
                 stack_id,
                 "add_index.yml",
-                ansible_vars,
                 inventory_path,
-                stack_details["cluster_manager_node"],
+                ansible_vars=ansible_vars,
+                limit=stack_details["cluster_manager_node"],
             )
+
+        # Apply SHC bundle if SHC cluster is enabled
+        if stack_details["shc_cluster"]:
+            run_ansible_playbook(
+                stack_id,
+                "apply_shc_bundle.yml",
+                inventory_path,
+                limit=stack_details["shc_deployer_node"],
+            )
+
     else:
         # Standalone
         ansible_vars["target_node"] = "all"
@@ -451,7 +504,11 @@ async def add_index(
             "/opt/splunk/etc/apps/001_splunk_aem/local/indexes.conf"
         )
         run_ansible_playbook(
-            stack_id, "add_index.yml", ansible_vars, inventory_path, "all"
+            stack_id,
+            "add_index.yml",
+            inventory_path,
+            ansible_vars=ansible_vars,
+            limit="all",
         )
 
     return {"message": "Index added successfully", "index": indexes[name]}
@@ -491,9 +548,9 @@ async def delete_index(stack_id: str, index_name: str):
         run_ansible_playbook(
             stack_id,
             "remove_index.yml",
-            ansible_vars,
             inventory_path,
-            stack_details["cluster_manager_node"],
+            ansible_vars=ansible_vars,
+            limit=stack_details["cluster_manager_node"],
         )
 
         # Remove from SHC deployer if enabled
@@ -504,9 +561,9 @@ async def delete_index(stack_id: str, index_name: str):
             run_ansible_playbook(
                 stack_id,
                 "remove_index.yml",
-                ansible_vars,
                 inventory_path,
-                stack_details["shc_deployer_node"],
+                ansible_vars=ansible_vars,
+                limit=stack_details["shc_deployer_node"],
             )
     else:
         # Standalone deployment
@@ -514,7 +571,11 @@ async def delete_index(stack_id: str, index_name: str):
             "/opt/splunk/etc/apps/001_splunk_aem/local/indexes.conf"
         )
         run_ansible_playbook(
-            stack_id, "remove_index.yml", ansible_vars, inventory_path, "all"
+            stack_id,
+            "remove_index.yml",
+            inventory_path,
+            ansible_vars=ansible_vars,
+            limit="all",
         )
 
     return {"message": "Index deleted successfully"}
