@@ -1,10 +1,19 @@
 from fastapi import FastAPI, HTTPException, Body
 from pydantic import BaseModel
 from typing import Dict
+import logging
 import json
 import os
 import subprocess
 import base64
+
+# Set up logging
+logging.basicConfig(
+    level=logging.DEBUG,  # Set to DEBUG for detailed logs
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+)
+
+logger = logging.getLogger("main")
 
 app = FastAPI()
 
@@ -84,6 +93,15 @@ def save_indexes(stack_id: str, data: dict):
     indexes_file = get_indexes_file(stack_id)
     with open(indexes_file, "w") as f:
         json.dump(data, f, indent=4)
+
+
+# Add logging middleware to capture API requests
+@app.middleware("http")
+async def log_requests(request, call_next):
+    logger.info(f"Request: {request.method} {request.url}")
+    response = await call_next(request)
+    logger.info(f"Response: {response.status_code}")
+    return response
 
 
 # GET /stacks
@@ -260,6 +278,12 @@ async def ansible_test(stack_id: str):
                 "ANSIBLE_LOCAL_TEMP": ansible_tmp_dir,
             },
         )
+        logger.debug(f"Ansible stdout: {result.stdout}")
+        (
+            logger.error(f"Ansible stderr: {result.stderr}")
+            if result.returncode != 0
+            else None
+        )
         if result.returncode != 0:
             raise HTTPException(
                 status_code=500,
@@ -322,6 +346,8 @@ async def add_index(
 
     if stack_details["enterprise_deployment_type"] == "distributed":
 
+        logger.info("Running add index for distributed.")
+
         #
         # push to cluster manager
         #
@@ -335,6 +361,8 @@ async def add_index(
 
         # Run Ansible playbook
         playbook_dir = "/app/ansible"
+
+        logger.info("Running Ansible command to add index on the cluster manager.")
         try:
             command = [
                 "ansible-playbook",
@@ -342,6 +370,7 @@ async def add_index(
                 "-e",
                 json.dumps(ansible_vars),
             ]
+            logger.debug(f"Command: {' '.join(command)}")
             result = subprocess.run(
                 command,
                 stdout=subprocess.PIPE,
@@ -352,12 +381,19 @@ async def add_index(
                     "ANSIBLE_LOCAL_TEMP": ansible_tmp_dir,
                 },
             )
+            logger.debug(f"Ansible stdout: {result.stdout}")
+            (
+                logger.error(f"Ansible stderr: {result.stderr}")
+                if result.returncode != 0
+                else None
+            )
             if result.returncode != 0:
                 raise HTTPException(
                     status_code=500,
                     detail=f"Ansible playbook failed: {result.stderr.strip()}",
                 )
         except Exception as e:
+            logger.exception("Error running Ansible playbook")
             raise HTTPException(
                 status_code=500, detail=f"Error running Ansible playbook: {str(e)}"
             )
@@ -373,6 +409,8 @@ async def add_index(
         file_path = "/opt/splunk/etc/shcluster/apps/001_splunk_aem/local/indexes.conf"
         ansible_vars["file_path"] = file_path
 
+        logger.info("Running Ansible command to add index on the SHC deployer.")
+
         # Run Ansible playbook
         playbook_dir = "/app/ansible"
         try:
@@ -382,6 +420,7 @@ async def add_index(
                 "-e",
                 json.dumps(ansible_vars),
             ]
+            logger.debug(f"Command: {' '.join(command)}")
             result = subprocess.run(
                 command,
                 stdout=subprocess.PIPE,
@@ -392,12 +431,19 @@ async def add_index(
                     "ANSIBLE_LOCAL_TEMP": ansible_tmp_dir,
                 },
             )
+            logger.debug(f"Ansible stdout: {result.stdout}")
+            (
+                logger.error(f"Ansible stderr: {result.stderr}")
+                if result.returncode != 0
+                else None
+            )
             if result.returncode != 0:
                 raise HTTPException(
                     status_code=500,
                     detail=f"Ansible playbook failed: {result.stderr.strip()}",
                 )
         except Exception as e:
+            logger.exception("Error running Ansible playbook")
             raise HTTPException(
                 status_code=500, detail=f"Error running Ansible playbook: {str(e)}"
             )
@@ -407,6 +453,8 @@ async def add_index(
         #
         # push to standalone
         #
+
+        logger.info("Running add index for standalone.")
 
         # set target node
         ansible_vars["target_node"] = "standalone"
@@ -430,6 +478,7 @@ async def add_index(
                 "-e",
                 json.dumps(ansible_vars),
             ]
+            logger.debug(f"Command: {' '.join(command)}")
             result = subprocess.run(
                 command,
                 stdout=subprocess.PIPE,
@@ -440,12 +489,19 @@ async def add_index(
                     "ANSIBLE_LOCAL_TEMP": ansible_tmp_dir,
                 },
             )
+            logger.debug(f"Ansible stdout: {result.stdout}")
+            (
+                logger.error(f"Ansible stderr: {result.stderr}")
+                if result.returncode != 0
+                else None
+            )
             if result.returncode != 0:
                 raise HTTPException(
                     status_code=500,
                     detail=f"Ansible playbook failed: {result.stderr.strip()}",
                 )
         except Exception as e:
+            logger.exception("Error running Ansible playbook")
             raise HTTPException(
                 status_code=500, detail=f"Error running Ansible playbook: {str(e)}"
             )
@@ -499,12 +555,19 @@ async def delete_index(stack_id: str, index_name: str):
                 "ANSIBLE_LOCAL_TEMP": ansible_tmp_dir,
             },
         )
+        logger.debug(f"Ansible stdout: {result.stdout}")
+        (
+            logger.error(f"Ansible stderr: {result.stderr}")
+            if result.returncode != 0
+            else None
+        )
         if result.returncode != 0:
             raise HTTPException(
                 status_code=500,
                 detail=f"Ansible playbook failed: {result.stderr.strip()}",
             )
     except Exception as e:
+        logger.exception("Error running Ansible playbook")
         raise HTTPException(
             status_code=500, detail=f"Error running Ansible playbook: {str(e)}"
         )

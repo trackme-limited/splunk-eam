@@ -37,4 +37,4 @@ EXPOSE 8443
 ENV ANSIBLE_SSH_ARGS="-o StrictHostKeyChecking=no"
 
 # Command to run the application
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8443"]
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8443", "--log-level", "debug"]
