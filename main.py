@@ -305,52 +305,150 @@ async def add_index(
     indexes[name] = {"maxDataSizeMB": maxDataSizeMB, "datatype": datatype}
     save_indexes(stack_id, indexes)
 
+    # Temporary directory for Ansible
+    ansible_tmp_dir = os.path.join(DATA_DIR, "ansible_tmp")
+    os.makedirs(ansible_tmp_dir, exist_ok=True)
+
     # Prepare Ansible variables
     stack_details = load_stack_file(stack_id)
-    file_path = (
-        "/opt/splunk/etc/shcluster/apps/001_splunk_aem/local/indexes.conf"
-        if stack_details["enterprise_deployment_type"] == "distributed"
-        else "/opt/splunk/etc/apps/001_splunk_aem/local/indexes.conf"
-    )
+
     ansible_vars = {
+        "target_node": "",
         "index_name": name,
         "maxDataSizeMB": maxDataSizeMB,
         "datatype": datatype,
         "file_path": file_path,
     }
 
-    # Temporary directory for Ansible
-    ansible_tmp_dir = os.path.join(DATA_DIR, "ansible_tmp")
-    os.makedirs(ansible_tmp_dir, exist_ok=True)
+    if stack_details["enterprise_deployment_type"] == "distributed":
 
-    # Run Ansible playbook
-    playbook_dir = "/app/ansible"
-    try:
-        command = [
-            "ansible-playbook",
-            f"{playbook_dir}/add_index.yml",
-            "-e",
-            json.dumps(ansible_vars),
-        ]
-        result = subprocess.run(
-            command,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-            env={
-                **os.environ,  # Keep existing environment variables
-                "ANSIBLE_LOCAL_TEMP": ansible_tmp_dir,
-            },
-        )
-        if result.returncode != 0:
-            raise HTTPException(
-                status_code=500,
-                detail=f"Ansible playbook failed: {result.stderr.strip()}",
+        #
+        # push to cluster manager
+        #
+
+        # set target node
+        ansible_vars["target_node"] = "cm1"
+
+        # set file path for cluster manager
+        file_path = "/opt/splunk/etc/manager-apps/001_splunk_aem/local/indexes.conf"
+        ansible_vars["file_path"] = file_path
+
+        # Run Ansible playbook
+        playbook_dir = "/app/ansible"
+        try:
+            command = [
+                "ansible-playbook",
+                f"{playbook_dir}/add_index.yml",
+                "-e",
+                json.dumps(ansible_vars),
+            ]
+            result = subprocess.run(
+                command,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                env={
+                    **os.environ,  # Keep existing environment variables
+                    "ANSIBLE_LOCAL_TEMP": ansible_tmp_dir,
+                },
             )
-    except Exception as e:
-        raise HTTPException(
-            status_code=500, detail=f"Error running Ansible playbook: {str(e)}"
-        )
+            if result.returncode != 0:
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"Ansible playbook failed: {result.stderr.strip()}",
+                )
+        except Exception as e:
+            raise HTTPException(
+                status_code=500, detail=f"Error running Ansible playbook: {str(e)}"
+            )
+
+        #
+        # push to SHC
+        #
+
+        # set target node
+        ansible_vars["target_node"] = "ds1"
+
+        # set file path for SHC
+        file_path = "/opt/splunk/etc/shcluster/apps/001_splunk_aem/local/indexes.conf"
+        ansible_vars["file_path"] = file_path
+
+        # Run Ansible playbook
+        playbook_dir = "/app/ansible"
+        try:
+            command = [
+                "ansible-playbook",
+                f"{playbook_dir}/add_index.yml",
+                "-e",
+                json.dumps(ansible_vars),
+            ]
+            result = subprocess.run(
+                command,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                env={
+                    **os.environ,  # Keep existing environment variables
+                    "ANSIBLE_LOCAL_TEMP": ansible_tmp_dir,
+                },
+            )
+            if result.returncode != 0:
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"Ansible playbook failed: {result.stderr.strip()}",
+                )
+        except Exception as e:
+            raise HTTPException(
+                status_code=500, detail=f"Error running Ansible playbook: {str(e)}"
+            )
+
+    else:
+
+        #
+        # push to standalone
+        #
+
+        # set target node
+        ansible_vars["target_node"] = "standalone"
+
+        # set file path for standalone
+        file_path = "/opt/splunk/etc/apps/001_splunk_aem/local/indexes.conf"
+        ansible_vars = {
+            "target_node": "standalone",
+            "index_name": name,
+            "maxDataSizeMB": maxDataSizeMB,
+            "datatype": datatype,
+            "file_path": file_path,
+        }
+
+        # Run Ansible playbook
+        playbook_dir = "/app/ansible"
+        try:
+            command = [
+                "ansible-playbook",
+                f"{playbook_dir}/add_index.yml",
+                "-e",
+                json.dumps(ansible_vars),
+            ]
+            result = subprocess.run(
+                command,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                env={
+                    **os.environ,  # Keep existing environment variables
+                    "ANSIBLE_LOCAL_TEMP": ansible_tmp_dir,
+                },
+            )
+            if result.returncode != 0:
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"Ansible playbook failed: {result.stderr.strip()}",
+                )
+        except Exception as e:
+            raise HTTPException(
+                status_code=500, detail=f"Error running Ansible playbook: {str(e)}"
+            )
 
     return {"message": "Index added successfully", "index": indexes[name]}
 
