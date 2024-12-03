@@ -97,8 +97,27 @@ def save_indexes(stack_id: str, data: dict):
 
 
 def run_ansible_playbook(
-    playbook_name: str, ansible_vars: dict, inventory_path: str, limit: str = None
+    stack_id: str,
+    playbook_name: str,
+    ansible_vars: dict,
+    inventory_path: str,
+    limit: str = None,
 ):
+
+    stack_dir, inventory_path, ssh_key_path = get_stack_paths(stack_id)
+
+    # Validate stack data
+    if not os.path.exists(stack_dir):
+        raise HTTPException(status_code=404, detail=f"Stack '{stack_id}' not found.")
+    if not os.path.exists(inventory_path):
+        raise HTTPException(
+            status_code=400, detail=f"Inventory file not found for stack '{stack_id}'."
+        )
+    if not os.path.exists(ssh_key_path):
+        raise HTTPException(
+            status_code=400, detail=f"SSH key not found for stack '{stack_id}'."
+        )
+
     playbook_dir = "/app/ansible"
     command = [
         "ansible-playbook",
@@ -393,6 +412,7 @@ async def add_index(
             "/opt/splunk/etc/manager-apps/001_splunk_aem/local/indexes.conf"
         )
         run_ansible_playbook(
+            stack_id,
             "add_index.yml",
             ansible_vars,
             inventory_path,
@@ -406,6 +426,7 @@ async def add_index(
                 "/opt/splunk/etc/shcluster/apps/001_splunk_aem/local/indexes.conf"
             )
             run_ansible_playbook(
+                stack_id,
                 "add_index.yml",
                 ansible_vars,
                 inventory_path,
@@ -417,7 +438,9 @@ async def add_index(
         ansible_vars["file_path"] = (
             "/opt/splunk/etc/apps/001_splunk_aem/local/indexes.conf"
         )
-        run_ansible_playbook("add_index.yml", ansible_vars, inventory_path, "all")
+        run_ansible_playbook(
+            stack_id, "add_index.yml", ansible_vars, inventory_path, "all"
+        )
 
     return {"message": "Index added successfully", "index": indexes[name]}
 
@@ -454,6 +477,7 @@ async def delete_index(stack_id: str, index_name: str):
             "/opt/splunk/etc/manager-apps/001_splunk_aem/local/indexes.conf"
         )
         run_ansible_playbook(
+            stack_id,
             "remove_index.yml",
             ansible_vars,
             inventory_path,
@@ -466,6 +490,7 @@ async def delete_index(stack_id: str, index_name: str):
                 "/opt/splunk/etc/shcluster/apps/001_splunk_aem/local/indexes.conf"
             )
             run_ansible_playbook(
+                stack_id,
                 "remove_index.yml",
                 ansible_vars,
                 inventory_path,
@@ -476,6 +501,8 @@ async def delete_index(stack_id: str, index_name: str):
         ansible_vars["file_path"] = (
             "/opt/splunk/etc/apps/001_splunk_aem/local/indexes.conf"
         )
-        run_ansible_playbook("remove_index.yml", ansible_vars, inventory_path, "all")
+        run_ansible_playbook(
+            stack_id, "remove_index.yml", ansible_vars, inventory_path, "all"
+        )
 
     return {"message": "Index deleted successfully"}
