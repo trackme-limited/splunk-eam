@@ -5,19 +5,34 @@
   vars:
     splunk_home: "/opt/splunk"
     splunk_port: "8089"
+    shc_members: []
+    splunk_username: ""
+    splunk_password: ""
 
   tasks:
-    - name: Get SHC status
+    - name: Ensure SHC members are provided
+      fail:
+        msg: "SHC members must be provided as a list in the variable 'shc_members'."
+      when: shc_members | length == 0
+
+    - name: Select an SHC member to query
+      set_fact:
+        shc_member: "{{ shc_members[0] }}"
+
+    - name: Get SHC status from a member
       shell: >
         {{ splunk_home }}/bin/splunk show shcluster-status
         -auth '{{ splunk_username }}:{{ splunk_password }}'
+        --target https://{{ shc_member }}:{{ splunk_port }}
       register: shcluster_status
+      when: inventory_hostname == shc_deployer_node
 
-    - name: Parse SHC captain
+    - name: Parse SHC captain from status
       set_fact:
         shc_captain: "{{ shcluster_status.stdout | regex_search('label : (.+)', '\\1') }}"
+      when: inventory_hostname == shc_deployer_node
 
-    - name: Apply SHC bundle
+    - name: Apply SHC bundle to the captain
       shell: >
         {{ splunk_home }}/bin/splunk apply shcluster-bundle
         -target https://{{ shc_captain }}:{{ splunk_port }}
@@ -25,8 +40,15 @@
         -auth '{{ splunk_username }}:{{ splunk_password }}'
       become_user: splunk
       register: shbundle_apply_result
+      when: inventory_hostname == shc_deployer_node
 
     - name: Display SHC bundle apply results (stdout)
       debug:
         msg: "{{ shbundle_apply_result.stdout.split('\n') }}"
+      when: inventory_hostname == shc_deployer_node
+
+    - name: Display SHC bundle apply results (stderr)
+      debug:
+        msg: "{{ shbundle_apply_result.stderr.split('\n') }}"
       ignore_errors: yes
+      when: inventory_hostname == shc_deployer_node

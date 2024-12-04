@@ -34,6 +34,7 @@ class Stack(BaseModel):
     shc_cluster: bool
     cluster_manager_node: str = None  # Optional unless distributed
     shc_deployer_node: str = None  # Optional unless shc_cluster
+    shc_members: list = None  # Optional unless shc_cluster
     ansible_python_interpreter: str = "/usr/bin/python3"  # Default Python interpreter
 
 
@@ -217,6 +218,13 @@ def create_stack(stack: Stack):
         raise HTTPException(
             status_code=400,
             detail="shc_deployer_node is required for SHC cluster setups.",
+        )
+
+    # Validate SHC members if SHC cluster is true
+    if stack.shc_cluster and not stack.shc_members:
+        raise HTTPException(
+            status_code=400,
+            detail="shc_members is required for SHC cluster setups.",
         )
 
     # Save stack data
@@ -490,6 +498,7 @@ async def add_index(
         # Push to SHC if enabled
         if stack_details["shc_cluster"]:
             ansible_vars["target_node"] = stack_details["shc_deployer_node"]
+            ansible_vars["shc_members"] = stack_details["shc_members"]
             ansible_vars["file_path"] = (
                 "/opt/splunk/etc/shcluster/apps/001_splunk_aem/local/indexes.conf"
             )
