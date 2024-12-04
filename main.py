@@ -403,12 +403,6 @@ async def ansible_test(stack_id: str):
         raise HTTPException(
             status_code=400, detail=f"SSH key not found for stack '{stack_id}'."
         )
-    # Ensure the credentials file exists
-    if not os.path.exists(creds_file_path):
-        raise HTTPException(
-            status_code=400,
-            detail=f"Splunk credentials not found for stack '{stack_id}'. Please add them using the /splunk_credentials endpoint.",
-        )
 
     # Run Ansible command
     try:
@@ -431,12 +425,9 @@ async def ansible_test(stack_id: str):
             text=True,
         )
         logger.debug(f"Ansible stdout: {result.stdout}")
-        (
-            logger.error(f"Ansible stderr: {result.stderr}")
-            if result.returncode != 0
-            else None
-        )
+
         if result.returncode != 0:
+            logger.error(f"Ansible stderr: {result.stderr}")
             raise HTTPException(
                 status_code=500,
                 detail=f"Ansible command failed: {result.stderr.strip()}",
@@ -459,6 +450,7 @@ async def ansible_test(stack_id: str):
             "message": "Ansible ping test successful",
             "results": structured_output,
         }
+
     except Exception as e:
         raise HTTPException(
             status_code=500, detail=f"Error running Ansible test: {str(e)}"
