@@ -516,6 +516,7 @@ async def add_index(
                 stack_id,
                 "apply_shc_bundle.yml",
                 inventory_path,
+                ansible_vars=ansible_vars,
                 limit=stack_details["shc_deployer_node"],
             )
 
