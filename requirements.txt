@@ -2,3 +2,4 @@ fastapi
 uvicorn[standard]
 ansible
 ansible-runner
+requests
