@@ -441,9 +441,23 @@ async def ansible_test(stack_id: str):
                 status_code=500,
                 detail=f"Ansible command failed: {result.stderr.strip()}",
             )
+
+        # Parse and structure the output
+        output_lines = result.stdout.strip().split("\n")
+        structured_output = []
+        for line in output_lines:
+            if "SUCCESS" in line:
+                host, details = line.split(" | ", 1)
+                structured_output.append(
+                    {
+                        "host": host.strip(),
+                        "details": json.loads(details.split(" => ", 1)[1]),
+                    }
+                )
+
         return {
             "message": "Ansible ping test successful",
-            "output": result.stdout.strip(),
+            "results": structured_output,
         }
     except Exception as e:
         raise HTTPException(
