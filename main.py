@@ -168,7 +168,16 @@ def run_ansible_playbook(
             ["-e", f"ansible_python_interpreter={ansible_python_interpreter}"]
         )
 
-    logger.debug(f"Running Ansible playbook: {command}")
+    # Sanitize the command for logging
+    sanitized_command = command[:]
+    if "splunk_password" in json.dumps(ansible_vars):
+        sanitized_ansible_vars = ansible_vars.copy()
+        sanitized_ansible_vars["splunk_password"] = "*****"
+        sanitized_command[sanitized_command.index("-e") + 1] = json.dumps(
+            sanitized_ansible_vars
+        )
+
+    logger.debug(f"Running Ansible playbook: {sanitized_command}")
 
     result = subprocess.run(
         command,
