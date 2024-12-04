@@ -3,16 +3,13 @@
   hosts: all
   become: yes
   vars:
-    cluster_manager_node: ""
     splunk_home: "/opt/splunk"
     splunk_port: "8089"
-    creds_file: ""
 
   tasks:
     - name: Apply cluster bundle
       shell: >
         {{ splunk_home }}/bin/splunk apply cluster-bundle
-        -uri https://{{ cluster_manager_node }}:{{ splunk_port }}
         --answer-yes
         -auth '{{ splunk_username }}:{{ splunk_password }}'
       become_user: splunk

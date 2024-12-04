@@ -5,8 +5,6 @@
   vars:
     splunk_home: "/opt/splunk"
     splunk_port: "8089"
-    creds_file: ""
-    shc_deployer_node: ""
 
   tasks:
     - name: Get SHC status
