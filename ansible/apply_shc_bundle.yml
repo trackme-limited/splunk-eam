@@ -27,15 +27,10 @@
       register: shcluster_status
       when: inventory_hostname == shc_deployer_node
 
-    - name: Parse SHC captain from status
-      set_fact:
-        shc_captain: "{{ shcluster_status.stdout | regex_search('label : (.+)', '\\1') }}"
-      when: inventory_hostname == shc_deployer_node
-
-    - name: Apply SHC bundle to the captain
+    - name: Apply SHC bundle
       shell: >
         {{ splunk_home }}/bin/splunk apply shcluster-bundle
-        -target https://{{ shc_captain }}:{{ splunk_port }}
+        -uri https://{{ shc_member }}:{{ splunk_port }}
         --answer-yes
         -auth '{{ splunk_username }}:{{ splunk_password }}'
       become_user: splunk
