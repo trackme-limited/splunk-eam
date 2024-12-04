@@ -6,6 +6,7 @@ import json
 import os
 import subprocess
 import base64
+import shutil
 
 # Set up logging
 logging.basicConfig(
@@ -271,6 +272,18 @@ def delete_stack(stack_id: str):
     file_path = os.path.join(DATA_DIR, f"{stack_id}.json")
     if os.path.exists(file_path):
         os.remove(file_path)
+
+    # Remove the entire stack directory
+    stack_dir = os.path.join(DATA_DIR, stack_id)
+    if os.path.exists(stack_dir):
+        try:
+            shutil.rmtree(stack_dir)  # Delete the directory and all its contents
+        except Exception as e:
+            logger.error(f"Failed to delete directory {stack_dir}: {e}")
+            raise HTTPException(
+                status_code=500,
+                detail=f"Failed to delete stack directory: {e}",
+            )
 
     return {"message": "Stack deleted successfully"}
 
