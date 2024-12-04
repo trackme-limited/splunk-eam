@@ -391,6 +391,7 @@ async def set_splunk_credentials(
 @app.post("/stacks/{stack_id}/ansible_test")
 async def ansible_test(stack_id: str):
     stack_dir, inventory_path, ssh_key_path = get_stack_paths(stack_id)
+    creds_file_path = os.path.join(stack_dir, "splunk_creds.json")
 
     # Validate stack data
     if not os.path.exists(stack_dir):
@@ -435,17 +436,33 @@ async def ansible_test(stack_id: str):
 
         # Parse and structure the output
         structured_output = []
-        output_lines = result.stdout.strip().split("\n")
-        for line in output_lines:
-            match = re.match(r"^(\S+)\s\|\sSUCCESS\s=>\s(.*)", line)
-            if match:
-                host = match.group(1).strip()
-                raw_details = match.group(2).strip()
-                try:
-                    details = json.loads(raw_details)
-                except json.JSONDecodeError:
-                    details = {"raw_output": raw_details}  # Fallback for malformed JSON
-                structured_output.append({"host": host, "details": details})
+        host_output = {}
+        for line in result.stdout.strip().split("\n"):
+            # Match host line
+            host_match = re.match(r"^(\S+)\s\|\sSUCCESS\s=>\s{", line)
+            if host_match:
+                # Save previous host's output
+                if host_output:
+                    structured_output.append(host_output)
+                host_output = {
+                    "host": host_match.group(1).strip(),
+                    "details": {"raw_output": ""},
+                }
+            elif host_output:
+                # Append subsequent lines to the current host's raw_output
+                host_output["details"]["raw_output"] += line + "\n"
+
+        # Append the last host's output
+        if host_output:
+            structured_output.append(host_output)
+
+        # Parse raw JSON if possible
+        for host in structured_output:
+            try:
+                host["details"] = json.loads(host["details"]["raw_output"].strip())
+            except json.JSONDecodeError:
+                # Keep raw_output if parsing fails
+                pass
 
         return {
             "message": "Ansible ping test successful",
