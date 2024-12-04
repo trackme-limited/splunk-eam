@@ -1,0 +1,19 @@
+---
+- name: Install Splunk App on Standalone
+  hosts: all
+  become: yes
+  vars:
+    splunk_home: "/opt/splunk"
+    splunk_app_tarball: ""
+    splunk_app_name: ""
+
+  tasks:
+    - name: Upload app tarball
+      copy:
+        src: "{{ splunk_app_tarball }}"
+        dest: "{{ splunk_home }}/etc/apps/{{ splunk_app_name }}.tgz"
+
+    - name: Install app using Splunk CLI
+      shell: >
+        {{ splunk_home }}/bin/splunk install app {{ splunk_home }}/etc/apps/{{ splunk_app_name }}.tgz -update 1
+      become_user: splunk

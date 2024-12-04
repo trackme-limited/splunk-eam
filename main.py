@@ -8,6 +8,8 @@ import subprocess
 import base64
 import shutil
 import re
+import requests
+import xml.etree.ElementTree as ET
 
 # Set up logging
 logging.basicConfig(
@@ -193,6 +195,55 @@ def run_ansible_playbook(
         raise HTTPException(
             status_code=500, detail=f"Ansible playbook failed: {result.stderr.strip()}"
         )
+
+
+def login_splunkbase(username, password, proxy_dict):
+    """
+    Log in to Splunkbase and return the ID value from the XML response.
+
+    Args:
+        username (str): The username for Splunkbase.
+        password (str): The password for Splunkbase.
+        proxy_dict (dict): Proxy settings to use for the request.
+
+    Returns:
+        str: The ID value from the XML response.
+
+    Raises:
+        Exception: If the login request to Splunkbase fails.
+    """
+    url = "https://splunkbase.splunk.com/api/account:login"
+    data = {"username": username, "password": password}
+
+    try:
+        response = requests.post(url, data=data, proxies=proxy_dict)
+
+        if response.status_code == 200:
+            xml_response = response.text
+            root = ET.fromstring(xml_response)
+
+            id_element = root.find("{http://www.w3.org/2005/Atom}id")
+
+            if id_element is not None:
+                return id_element.text
+            else:
+                logging.error(
+                    "Splunkbase login failed, ID element not found in the XML response"
+                )
+                raise Exception(
+                    "Splunkbase login failed, ID element not found in the XML response"
+                )
+        else:
+            logging.error(
+                f"Splunkbase login request failed with status code {response.status_code}"
+            )
+            raise Exception(
+                f"Splunkbase login request failed with status code {response.status_code}"
+            )
+
+    except Exception as e:
+        logging.error(f"Splunkbase login failed: exception={e}")
+        raise Exception("Splunkbase login failed") from e
 
 
 # Add logging middleware to capture API requests
@@ -648,3 +699,150 @@ async def delete_index(stack_id: str, index_name: str):
         )
 
     return {"message": "Index deleted successfully"}
+
+
+@app.post("/stacks/{stack_id}/install_splunk_app")
+async def install_splunk_app(
+    stack_id: str,
+    splunkbase_username: str = Body(..., embed=True),
+    splunkbase_password: str = Body(..., embed=True),
+    splunkbase_app_id: str = Body(..., embed=True),
+    splunkbase_app_name: str = Body(..., embed=True),
+    version: str = Body(..., embed=True),
+):
+    stack_details = load_stack_file(stack_id)
+    stack_dir = ensure_stack_dir(stack_id)
+    apps_file_path = os.path.join(stack_dir, "stack_apps.json")
+    stack_dir, inventory_path, ssh_key_path = get_stack_paths(stack_id)
+
+    # Load or create the apps file
+    if not os.path.exists(apps_file_path):
+        with open(apps_file_path, "w") as f:
+            json.dump({}, f)
+
+    with open(apps_file_path, "r") as f:
+        installed_apps = json.load(f)
+
+    # Check if app is already installed
+    if splunkbase_app_name in installed_apps:
+        if installed_apps[splunkbase_app_name]["version"] == version:
+            return {
+                "message": "App already installed",
+                "app_details": installed_apps[splunkbase_app_name],
+            }
+
+    # Log in to Splunk Base
+    session_id = login_splunkbase(
+        splunkbase_username, splunkbase_password, proxy_dict={}
+    )
+
+    # Download app tarball
+    app_download_url = f"https://splunkbase.splunk.com/api/v1/app/{splunkbase_app_id}/release/{version}/download/"
+    response = requests.get(
+        app_download_url, headers={"X-Auth-Token": session_id}, stream=True
+    )
+
+    if response.status_code != 200:
+        raise HTTPException(
+            status_code=500, detail="Failed to download app from Splunk Base"
+        )
+
+    app_tar_path = os.path.join(stack_dir, f"{splunkbase_app_name}.tgz")
+    with open(app_tar_path, "wb") as f:
+        f.write(response.content)
+
+    # Run Ansible playbook
+    playbook = (
+        "install_standalone_app.yml"
+        if stack_details["enterprise_deployment_type"] == "standalone"
+        else "install_shc_app.yml"
+    )
+    ansible_vars = {
+        "splunk_app_tarball": app_tar_path,
+        "splunk_app_name": splunkbase_app_name,
+    }
+
+    if stack_details["enterprise_deployment_type"] != "standalone":
+        ansible_vars.update({"shc_deployer_node": stack_details["shc_deployer_node"]})
+
+    run_ansible_playbook(stack_id, playbook, inventory_path, ansible_vars=ansible_vars)
+
+    # Update apps JSON
+    installed_apps[splunkbase_app_name] = {"id": splunkbase_app_id, "version": version}
+    with open(apps_file_path, "w") as f:
+        json.dump(installed_apps, f, indent=4)
+
+    # Apply SHC bundle if needed
+    if stack_details["shc_cluster"]:
+        run_ansible_playbook(
+            stack_id,
+            "apply_shc_bundle.yml",
+            inventory_path,
+            ansible_vars={},
+            limit=stack_details["shc_deployer_node"],
+        )
+
+    return {
+        "message": "App installed successfully",
+        "app_details": installed_apps[splunkbase_app_name],
+    }
+
+
+@app.delete("/stacks/{stack_id}/delete_splunk_app")
+async def delete_splunk_app(
+    stack_id: str, splunkbase_app_name: str = Body(..., embed=True)
+):
+    stack_details = load_stack_file(stack_id)
+    stack_dir = ensure_stack_dir(stack_id)
+    apps_file_path = os.path.join(stack_dir, "stack_apps.json")
+    stack_dir, inventory_path, ssh_key_path = get_stack_paths(stack_id)
+
+    # Load the apps file
+    if not os.path.exists(apps_file_path):
+        raise HTTPException(
+            status_code=404, detail="No apps file found for this stack."
+        )
+
+    with open(apps_file_path, "r") as f:
+        installed_apps = json.load(f)
+
+    # Check if app exists in the stack
+    if splunkbase_app_name not in installed_apps:
+        raise HTTPException(
+            status_code=404, detail="App not found in this stack's installed apps."
+        )
+
+    # Run Ansible playbook for app removal
+    playbook = (
+        "remove_standalone_app.yml"
+        if stack_details["enterprise_deployment_type"] == "standalone"
+        else "remove_shc_app.yml"
+    )
+    ansible_vars = {
+        "splunk_app_name": splunkbase_app_name,
+    }
+
+    if stack_details["enterprise_deployment_type"] != "standalone":
+        ansible_vars.update({"shc_deployer_node": stack_details["shc_deployer_node"]})
+
+    run_ansible_playbook(stack_id, playbook, inventory_path, ansible_vars=ansible_vars)
+
+    # If SHC, apply the bundle
+    if stack_details["shc_cluster"]:
+        run_ansible_playbook(
+            stack_id,
+            "apply_shc_bundle.yml",
+            inventory_path,
+            ansible_vars={},
+            limit=stack_details["shc_deployer_node"],
+        )
+
+    # Update the apps JSON file
+    del installed_apps[splunkbase_app_name]
+    with open(apps_file_path, "w") as f:
+        json.dump(installed_apps, f, indent=4)
+
+    return {
+        "message": f"App {splunkbase_app_name} deleted successfully",
+        "remaining_apps": installed_apps,
+    }

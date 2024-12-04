@@ -1,0 +1,29 @@
+---
+- name: Install Splunk App on SHC
+  hosts: all
+  become: yes
+  vars:
+    splunk_home: "/opt/splunk"
+    splunk_app_tarball: ""
+    splunk_app_name: ""
+    app_destination: "/opt/splunk/etc/shcluster/apps"
+
+  tasks:
+    - name: Upload app tarball
+      copy:
+        src: "{{ splunk_app_tarball }}"
+        dest: "{{ app_destination }}/{{ splunk_app_name }}.tgz"
+      when: inventory_hostname == shc_deployer_node
+
+    - name: Extract app tarball
+      shell: >
+        tar -xzf {{ app_destination }}/{{ splunk_app_name }}.tgz -C {{ app_destination }}
+      when: inventory_hostname == shc_deployer_node
+
+    - name: Set ownership and permissions
+      file:
+        path: "{{ app_destination }}/{{ splunk_app_name }}"
+        owner: splunk
+        group: splunk
+        recurse: yes
+      when: inventory_hostname == shc_deployer_node

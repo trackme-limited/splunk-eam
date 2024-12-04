@@ -1,0 +1,21 @@
+---
+- name: Remove Splunk App from SHC
+  hosts: all
+  become: yes
+  vars:
+    splunk_home: "/opt/splunk"
+    splunk_app_name: ""
+    app_destination: "/opt/splunk/etc/shcluster/apps"
+
+  tasks:
+    - name: Remove app directory
+      file:
+        path: "{{ app_destination }}/{{ splunk_app_name }}"
+        state: absent
+      when: inventory_hostname == shc_deployer_node
+
+    - name: Remove app tarball if exists
+      file:
+        path: "{{ app_destination }}/{{ splunk_app_name }}.tgz"
+        state: absent
+      when: inventory_hostname == shc_deployer_node
