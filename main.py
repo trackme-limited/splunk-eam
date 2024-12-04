@@ -497,7 +497,7 @@ async def add_index(
 
         # Push to SHC if enabled
         if stack_details["shc_cluster"]:
-            ansible_vars["target_node"] = stack_details["shc_deployer_node"]
+            ansible_vars["shc_deployer_node"] = stack_details["shc_deployer_node"]
             ansible_vars["shc_members"] = stack_details["shc_members"]
             ansible_vars["file_path"] = (
                 "/opt/splunk/etc/shcluster/apps/001_splunk_aem/local/indexes.conf"
@@ -507,7 +507,7 @@ async def add_index(
                 "add_index.yml",
                 inventory_path,
                 ansible_vars=ansible_vars,
-                limit=stack_details["cluster_manager_node"],
+                limit=stack_details["shc_deployer_node"],
             )
 
         # Apply SHC bundle if SHC cluster is enabled
