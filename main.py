@@ -742,6 +742,10 @@ async def install_splunk_app(
         app_download_url, headers={"X-Auth-Token": session_id}, stream=True
     )
 
+    logging.debug(
+        f"Splunkbase app download response status code: {response.status_code} response: {response.status_code}"
+    )
+
     if response.status_code != 200:
         raise HTTPException(
             status_code=500, detail="Failed to download app from Splunk Base"
