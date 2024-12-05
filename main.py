@@ -249,6 +249,52 @@ def login_splunkbase(username, password, proxy_dict):
         raise Exception("Splunkbase login failed") from e
 
 
+def download_splunk_app(session_id, app_id, version, output_path):
+    """
+    Download a Splunk app release from Splunk Base.
+
+    Args:
+        session_id (str): Splunk Base session ID obtained from login.
+        app_id (str): The ID of the app on Splunk Base.
+        version (str): The version of the app to download.
+        output_path (str): The local file path to save the downloaded app.
+
+    Returns:
+        str: The path to the downloaded file.
+
+    Raises:
+        HTTPException: If the download fails.
+    """
+    download_url = (
+        f"https://splunkbase.splunk.com/app/{app_id}/release/{version}/download/"
+    )
+    headers = {"X-Auth-Token": session_id}
+
+    try:
+        response = requests.get(
+            download_url, headers=headers, stream=True, allow_redirects=True
+        )
+
+        if response.status_code != 200:
+            raise HTTPException(
+                status_code=500,
+                detail=f"Failed to download app. HTTP {response.status_code}: {response.text}",
+            )
+
+        # Write the response content to the file
+        with open(output_path, "wb") as f:
+            for chunk in response.iter_content(chunk_size=8192):
+                if chunk:  # Filter out keep-alive new chunks
+                    f.write(chunk)
+
+        logger.info(f"App downloaded successfully: {output_path}")
+        return output_path
+
+    except requests.exceptions.RequestException as e:
+        logger.error(f"Error downloading Splunk app: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to download app: {str(e)}")
+
+
 # Add logging middleware to capture API requests
 @app.middleware("http")
 async def log_requests(request, call_next):
@@ -740,31 +786,8 @@ async def install_splunk_app(
     )
 
     # Download app tarball
-    app_download_url = f"https://splunkbase.splunk.com/api/v2/app/{splunkbase_app_id}/release/{version}/download/"
-    params = {
-        "origin": "sb",
-        "lead": "true",
-        "_gl": session_id,
-    }
-    response = requests.get(
-        app_download_url,
-        headers={"X-Auth-Token": session_id},
-        stream=True,
-        params=params,
-    )
-
-    logging.debug(
-        f"Splunkbase app download response status code: {response.status_code} response: {response.text}"
-    )
-
-    if response.status_code != 200:
-        raise HTTPException(
-            status_code=500, detail="Failed to download app from Splunk Base"
-        )
-
     app_tar_path = os.path.join(stack_dir, f"{splunkbase_app_name}.tgz")
-    with open(app_tar_path, "wb") as f:
-        f.write(response.content)
+    download_splunk_app(session_id, splunkbase_app_id, version, app_tar_path)
 
     # Run Ansible playbook
     playbook = (
