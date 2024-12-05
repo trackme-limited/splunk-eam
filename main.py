@@ -830,11 +830,14 @@ async def install_splunk_app(
 
     # Apply SHC bundle if needed
     if stack_details["shc_cluster"]:
+        ansible_vars = {}
+        ansible_vars["shc_deployer_node"] = stack_details["shc_deployer_node"]
+        ansible_vars["shc_members"] = stack_details["shc_members"]
         run_ansible_playbook(
             stack_id,
             "apply_shc_bundle.yml",
             inventory_path,
-            ansible_vars={},
+            ansible_vars=ansible_vars,
             limit=stack_details["shc_deployer_node"],
         )
 
