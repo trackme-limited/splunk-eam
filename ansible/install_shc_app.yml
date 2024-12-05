@@ -1,29 +1,32 @@
 ---
 - name: Install Splunk App on SHC
-  hosts: all
+  hosts: "{{ shc_deployer_node }}"
   become: yes
   vars:
-    splunk_home: "/opt/splunk"
-    splunk_app_tarball: ""
     splunk_app_name: ""
-    app_destination: "/opt/splunk/etc/shcluster/apps"
+    splunk_home: "/opt/splunk"
 
   tasks:
     - name: Upload app tarball
-      copy:
-        src: "{{ splunk_app_tarball }}"
-        dest: "{{ app_destination }}/{{ splunk_app_name }}.tgz"
-      when: inventory_hostname == shc_deployer_node
+      ansible.builtin.copy:
+        src: "{{ splunk_app_name }}.tgz"
+        dest: "{{ splunk_home }}/etc/shcluster/apps/{{ splunk_app_name }}.tgz"
 
     - name: Extract app tarball
-      shell: >
-        tar -xzf {{ app_destination }}/{{ splunk_app_name }}.tgz -C {{ app_destination }}
-      when: inventory_hostname == shc_deployer_node
+      ansible.builtin.unarchive:
+        src: "{{ splunk_home }}/etc/shcluster/apps/{{ splunk_app_name }}.tgz"
+        dest: "{{ splunk_home }}/etc/shcluster/apps/{{ splunk_app_name }}"
+        remote_src: yes
+
+    - name: Remove app tarball after extraction
+      ansible.builtin.file:
+        path: "{{ splunk_home }}/etc/shcluster/apps/{{ splunk_app_name }}.tgz"
+        state: absent
 
     - name: Set ownership and permissions
-      file:
-        path: "{{ app_destination }}/{{ splunk_app_name }}"
+      ansible.builtin.file:
+        path: "{{ splunk_home }}/etc/shcluster/apps/{{ splunk_app_name }}"
+        state: directory
         owner: splunk
         group: splunk
         recurse: yes
-      when: inventory_hostname == shc_deployer_node

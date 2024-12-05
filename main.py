@@ -761,24 +761,12 @@ async def install_splunk_app(
 ):
     stack_details = load_stack_file(stack_id)
     stack_dir = ensure_stack_dir(stack_id)
-    apps_file_path = os.path.join(stack_dir, "stack_apps.json")
     stack_dir, inventory_path, ssh_key_path = get_stack_paths(stack_id)
+    files_dir = os.path.join(stack_dir, "files")
+    os.makedirs(files_dir, exist_ok=True)
 
-    # Load or create the apps file
-    if not os.path.exists(apps_file_path):
-        with open(apps_file_path, "w") as f:
-            json.dump({}, f)
-
-    with open(apps_file_path, "r") as f:
-        installed_apps = json.load(f)
-
-    # Check if app is already installed
-    if splunkbase_app_name in installed_apps:
-        if installed_apps[splunkbase_app_name]["version"] == version:
-            return {
-                "message": "App already installed",
-                "app_details": installed_apps[splunkbase_app_name],
-            }
+    # Path to the downloaded tarball
+    app_tar_path = os.path.join(files_dir, f"{splunkbase_app_name}.tgz")
 
     # Log in to Splunk Base
     session_id = login_splunkbase(
@@ -786,8 +774,31 @@ async def install_splunk_app(
     )
 
     # Download app tarball
-    app_tar_path = os.path.join(stack_dir, f"{splunkbase_app_name}.tgz")
-    download_splunk_app(session_id, splunkbase_app_id, version, app_tar_path)
+    app_download_url = f"https://splunkbase.splunk.com/app/{splunkbase_app_id}/release/{version}/download/"
+    response = requests.get(
+        app_download_url,
+        headers={"X-Auth-Token": session_id},
+        stream=True,
+        allow_redirects=True,
+    )
+
+    if response.status_code != 200:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to download app from Splunk Base: {response.text}",
+        )
+
+    with open(app_tar_path, "wb") as f:
+        f.write(response.content)
+    logger.info(f"App downloaded successfully: {app_tar_path}")
+
+    # Ensure Ansible's files directory exists
+    ansible_files_dir = "/app/ansible/files"
+    os.makedirs(ansible_files_dir, exist_ok=True)
+
+    # Copy tarball to Ansible's files directory
+    ansible_tar_path = os.path.join(ansible_files_dir, f"{splunkbase_app_name}.tgz")
+    shutil.copy(app_tar_path, ansible_tar_path)
 
     # Run Ansible playbook
     playbook = (
@@ -796,7 +807,6 @@ async def install_splunk_app(
         else "install_shc_app.yml"
     )
     ansible_vars = {
-        "splunk_app_tarball": app_tar_path,
         "splunk_app_name": splunkbase_app_name,
     }
 
@@ -805,7 +815,15 @@ async def install_splunk_app(
 
     run_ansible_playbook(stack_id, playbook, inventory_path, ansible_vars=ansible_vars)
 
-    # Update apps JSON
+    # Update the apps file
+    apps_file_path = os.path.join(stack_dir, "stack_apps.json")
+    if not os.path.exists(apps_file_path):
+        with open(apps_file_path, "w") as f:
+            json.dump({}, f)
+
+    with open(apps_file_path, "r") as f:
+        installed_apps = json.load(f)
+
     installed_apps[splunkbase_app_name] = {"id": splunkbase_app_id, "version": version}
     with open(apps_file_path, "w") as f:
         json.dump(installed_apps, f, indent=4)
