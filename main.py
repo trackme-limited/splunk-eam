@@ -774,6 +774,10 @@ async def install_splunk_app(
     with open(apps_file_path, "r") as f:
         installed_apps = json.load(f)
 
+    logging.debug(
+        f"Installed apps on stack {stack_id}: {json.dumps(installed_apps, indent=4)}"
+    )
+
     # Check if the app is already installed with the requested version
     if (
         splunkbase_app_name in installed_apps
@@ -783,6 +787,11 @@ async def install_splunk_app(
             "message": f"App '{splunkbase_app_name}' is already installed with version {version}.",
             "app_details": installed_apps[splunkbase_app_name],
         }
+
+    else:
+        logging.debug(
+            f"App {splunkbase_app_name} is not installed with version {version}, downloading and installing will be requested."
+        )
 
     # Path to the downloaded tarball
     app_tar_path = os.path.join(files_dir, f"{splunkbase_app_name}.tgz")
