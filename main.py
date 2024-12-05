@@ -225,6 +225,9 @@ def login_splunkbase(username, password, proxy_dict):
             id_element = root.find("{http://www.w3.org/2005/Atom}id")
 
             if id_element is not None:
+                logging.info(
+                    f"Splunkbase login successful, http status code: {response.status_code}"
+                )
                 return id_element.text
             else:
                 logging.error(
@@ -738,12 +741,20 @@ async def install_splunk_app(
 
     # Download app tarball
     app_download_url = f"https://splunkbase.splunk.com/api/v2/app/{splunkbase_app_id}/release/{version}/download/"
+    params = {
+        "origin": "sb",
+        "lead": "true",
+        "_gl": session_id,
+    }
     response = requests.get(
-        app_download_url, headers={"X-Auth-Token": session_id}, stream=True
+        app_download_url,
+        headers={"X-Auth-Token": session_id},
+        stream=True,
+        params=params,
     )
 
     logging.debug(
-        f"Splunkbase app download response status code: {response.status_code} response: {response.status_code}"
+        f"Splunkbase app download response status code: {response.status_code} response: {response.text}"
     )
 
     if response.status_code != 200:
