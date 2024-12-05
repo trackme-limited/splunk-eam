@@ -750,7 +750,7 @@ async def delete_index(stack_id: str, index_name: str):
     return {"message": "Index deleted successfully"}
 
 
-@app.post("/stacks/{stack_id}/get_installed_apps")
+@app.post("/stacks/{stack_id}/installed_apps")
 async def install_splunk_app(
     stack_id: str,
 ):
