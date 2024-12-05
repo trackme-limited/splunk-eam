@@ -108,9 +108,9 @@ def run_ansible_playbook(
     inventory_path: str,
     ansible_vars: dict = None,
     limit: str = None,
+    creds: dict = None,
 ):
     stack_dir, inventory_path, ssh_key_path = get_stack_paths(stack_id)
-    creds_file_path = os.path.join(stack_dir, "splunk_creds.json")
 
     # Validate stack data
     if not os.path.exists(stack_dir):
@@ -126,15 +126,13 @@ def run_ansible_playbook(
 
     # Ensure the credentials file exists if required
     if "apply_cluster_bundle" in playbook_name or "apply_shc_bundle" in playbook_name:
-        if not os.path.exists(creds_file_path):
+        if not creds:
             raise HTTPException(
                 status_code=400,
-                detail=f"Splunk credentials not found for stack '{stack_id}'. Please add them using the /splunk_credentials endpoint.",
+                detail=f"Splunk credentials not provided for stack '{stack_id}'. Please ensure to submit splunk_username and splunk_password.",
             )
 
         # Inject credentials into ansible_vars
-        with open(creds_file_path, "r") as creds_file:
-            creds = json.load(creds_file)
         if ansible_vars is None:
             ansible_vars = {}
         ansible_vars.update(
@@ -467,31 +465,9 @@ async def upload_ssh_key(stack_id: str, ssh_key_b64: str = Body(..., embed=True)
     }
 
 
-@app.post("/stacks/{stack_id}/splunk_credentials")
-async def set_splunk_credentials(
-    stack_id: str, username: str = Body(...), password: str = Body(...)
-):
-    # Ensure stack exists
-    stack_dir = ensure_stack_dir(stack_id)
-    creds_path = os.path.join(stack_dir, "splunk_creds.json")
-
-    # Store credentials securely
-    try:
-        creds = {"username": username, "password": password}
-        with open(creds_path, "w") as f:
-            json.dump(creds, f)
-    except Exception as e:
-        raise HTTPException(
-            status_code=500, detail=f"Error saving credentials: {str(e)}"
-        )
-
-    return {"message": f"Credentials saved for stack '{stack_id}'"}
-
-
 @app.post("/stacks/{stack_id}/ansible_test")
 async def ansible_test(stack_id: str):
     stack_dir, inventory_path, ssh_key_path = get_stack_paths(stack_id)
-    creds_file_path = os.path.join(stack_dir, "splunk_creds.json")
 
     # Validate stack data
     if not os.path.exists(stack_dir):
@@ -584,6 +560,8 @@ async def get_indexes(stack_id: str):
 @app.post("/stacks/{stack_id}/indexes")
 async def add_index(
     stack_id: str,
+    splunk_username: str = Body(..., embed=True),
+    splunk_password: str = Body(..., embed=True),
     name: str = Body(..., embed=True),
     maxDataSizeMB: int = Body(None, embed=True),
     datatype: str = Body(None, embed=True),
@@ -631,6 +609,7 @@ async def add_index(
             inventory_path,
             ansible_vars=ansible_vars,
             limit=stack_details["cluster_manager_node"],
+            creds={"username": splunk_username, "password": splunk_password},
         )
 
         # Apply cluster bundle
@@ -639,6 +618,7 @@ async def add_index(
             "apply_cluster_bundle.yml",
             inventory_path,
             limit=stack_details["cluster_manager_node"],
+            creds={"username": splunk_username, "password": splunk_password},
         )
 
         # Push to SHC if enabled
@@ -654,6 +634,7 @@ async def add_index(
                 inventory_path,
                 ansible_vars=ansible_vars,
                 limit=stack_details["shc_deployer_node"],
+                creds={"username": splunk_username, "password": splunk_password},
             )
 
         # Apply SHC bundle if SHC cluster is enabled
@@ -664,6 +645,7 @@ async def add_index(
                 inventory_path,
                 ansible_vars=ansible_vars,
                 limit=stack_details["shc_deployer_node"],
+                creds={"username": splunk_username, "password": splunk_password},
             )
 
     else:
@@ -678,6 +660,7 @@ async def add_index(
             inventory_path,
             ansible_vars=ansible_vars,
             limit="all",
+            creds={"username": splunk_username, "password": splunk_password},
         )
 
     return {"message": "Index added successfully", "index": indexes[name]}
@@ -685,6 +668,8 @@ async def add_index(
 
 @app.delete("/stacks/{stack_id}/indexes/{index_name}")
 async def delete_index(stack_id: str, index_name: str):
+    splunk_username: str = (Body(..., embed=True),)
+    splunk_password: str = (Body(..., embed=True),)
     # Load indexes and validate
     indexes = load_indexes(stack_id)
     if index_name not in indexes:
@@ -720,6 +705,7 @@ async def delete_index(stack_id: str, index_name: str):
             inventory_path,
             ansible_vars=ansible_vars,
             limit=stack_details["cluster_manager_node"],
+            creds={"username": splunk_username, "password": splunk_password},
         )
 
         # Remove from SHC deployer if enabled
@@ -733,6 +719,7 @@ async def delete_index(stack_id: str, index_name: str):
                 inventory_path,
                 ansible_vars=ansible_vars,
                 limit=stack_details["shc_deployer_node"],
+                creds={"username": splunk_username, "password": splunk_password},
             )
     else:
         # Standalone deployment
@@ -745,6 +732,7 @@ async def delete_index(stack_id: str, index_name: str):
             inventory_path,
             ansible_vars=ansible_vars,
             limit="all",
+            creds={"username": splunk_username, "password": splunk_password},
         )
 
     return {"message": "Index deleted successfully"}
@@ -779,6 +767,8 @@ async def install_splunk_app(
 @app.post("/stacks/{stack_id}/install_splunk_app")
 async def install_splunk_app(
     stack_id: str,
+    splunk_username: str = Body(..., embed=True),
+    splunk_password: str = Body(..., embed=True),
     splunkbase_username: str = Body(..., embed=True),
     splunkbase_password: str = Body(..., embed=True),
     splunkbase_app_id: str = Body(..., embed=True),
@@ -867,7 +857,13 @@ async def install_splunk_app(
     if stack_details["enterprise_deployment_type"] != "standalone":
         ansible_vars.update({"shc_deployer_node": stack_details["shc_deployer_node"]})
 
-    run_ansible_playbook(stack_id, playbook, inventory_path, ansible_vars=ansible_vars)
+    run_ansible_playbook(
+        stack_id,
+        playbook,
+        inventory_path,
+        ansible_vars=ansible_vars,
+        creds={"username": splunk_username, "password": splunk_password},
+    )
 
     # Update the apps file
     installed_apps[splunkbase_app_name] = {"id": splunkbase_app_id, "version": version}
@@ -885,6 +881,7 @@ async def install_splunk_app(
             inventory_path,
             ansible_vars=ansible_vars,
             limit=stack_details["shc_deployer_node"],
+            creds={"username": splunk_username, "password": splunk_password},
         )
 
     return {
@@ -897,6 +894,8 @@ async def install_splunk_app(
 async def delete_splunk_app(
     stack_id: str, splunkbase_app_name: str = Body(..., embed=True)
 ):
+    splunk_username: str = (Body(..., embed=True),)
+    splunk_password: str = (Body(..., embed=True),)
     stack_details = load_stack_file(stack_id)
     stack_dir = ensure_stack_dir(stack_id)
     apps_file_path = os.path.join(stack_dir, "stack_apps.json")
@@ -930,7 +929,13 @@ async def delete_splunk_app(
     if stack_details["enterprise_deployment_type"] != "standalone":
         ansible_vars.update({"shc_deployer_node": stack_details["shc_deployer_node"]})
 
-    run_ansible_playbook(stack_id, playbook, inventory_path, ansible_vars=ansible_vars)
+    run_ansible_playbook(
+        stack_id,
+        playbook,
+        inventory_path,
+        ansible_vars=ansible_vars,
+        creds={"username": splunk_username, "password": splunk_password},
+    )
 
     # If SHC, apply the bundle
     if stack_details["shc_cluster"]:
@@ -940,6 +945,7 @@ async def delete_splunk_app(
             inventory_path,
             ansible_vars={},
             limit=stack_details["shc_deployer_node"],
+            creds={"username": splunk_username, "password": splunk_password},
         )
 
     # Update the apps JSON file
