@@ -773,7 +773,7 @@ async def install_splunk_app(
         f"Installed apps on stack {stack_id}: {json.dumps(installed_apps, indent=4)}"
     )
 
-    return json.dumps(installed_apps, indent=4)
+    return installed_apps
 
 
 @app.post("/stacks/{stack_id}/install_splunk_app")
