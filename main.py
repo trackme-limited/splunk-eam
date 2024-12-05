@@ -765,6 +765,25 @@ async def install_splunk_app(
     files_dir = os.path.join(stack_dir, "files")
     os.makedirs(files_dir, exist_ok=True)
 
+    # Load the apps file to check for existing installations
+    apps_file_path = os.path.join(stack_dir, "stack_apps.json")
+    if not os.path.exists(apps_file_path):
+        with open(apps_file_path, "w") as f:
+            json.dump({}, f)
+
+    with open(apps_file_path, "r") as f:
+        installed_apps = json.load(f)
+
+    # Check if the app is already installed with the requested version
+    if (
+        splunkbase_app_name in installed_apps
+        and installed_apps[splunkbase_app_name]["version"] == version
+    ):
+        return {
+            "message": f"App '{splunkbase_app_name}' is already installed with version {version}.",
+            "app_details": installed_apps[splunkbase_app_name],
+        }
+
     # Path to the downloaded tarball
     app_tar_path = os.path.join(files_dir, f"{splunkbase_app_name}.tgz")
 
@@ -816,14 +835,6 @@ async def install_splunk_app(
     run_ansible_playbook(stack_id, playbook, inventory_path, ansible_vars=ansible_vars)
 
     # Update the apps file
-    apps_file_path = os.path.join(stack_dir, "stack_apps.json")
-    if not os.path.exists(apps_file_path):
-        with open(apps_file_path, "w") as f:
-            json.dump({}, f)
-
-    with open(apps_file_path, "r") as f:
-        installed_apps = json.load(f)
-
     installed_apps[splunkbase_app_name] = {"id": splunkbase_app_id, "version": version}
     with open(apps_file_path, "w") as f:
         json.dump(installed_apps, f, indent=4)
