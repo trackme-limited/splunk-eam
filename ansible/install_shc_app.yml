@@ -15,7 +15,7 @@
     - name: Extract app tarball
       ansible.builtin.unarchive:
         src: "{{ splunk_home }}/etc/shcluster/apps/{{ splunk_app_name }}.tgz"
-        dest: "{{ splunk_home }}/etc/shcluster/apps/{{ splunk_app_name }}"
+        dest: "{{ splunk_home }}/etc/shcluster/apps/"
         remote_src: yes
 
     - name: Remove app tarball after extraction
