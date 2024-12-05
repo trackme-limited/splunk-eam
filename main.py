@@ -750,6 +750,32 @@ async def delete_index(stack_id: str, index_name: str):
     return {"message": "Index deleted successfully"}
 
 
+@app.post("/stacks/{stack_id}/get_installed_apps")
+async def install_splunk_app(
+    stack_id: str,
+):
+    stack_details = load_stack_file(stack_id)
+    stack_dir = ensure_stack_dir(stack_id)
+    stack_dir, inventory_path, ssh_key_path = get_stack_paths(stack_id)
+    files_dir = os.path.join(stack_dir, "files")
+    os.makedirs(files_dir, exist_ok=True)
+
+    # Load the apps file to check for existing installations
+    apps_file_path = os.path.join(stack_dir, "stack_apps.json")
+    if not os.path.exists(apps_file_path):
+        with open(apps_file_path, "w") as f:
+            json.dump({}, f)
+
+    with open(apps_file_path, "r") as f:
+        installed_apps = json.load(f)
+
+    logging.debug(
+        f"Installed apps on stack {stack_id}: {json.dumps(installed_apps, indent=4)}"
+    )
+
+    return json.dumps(installed_apps, indent=4)
+
+
 @app.post("/stacks/{stack_id}/install_splunk_app")
 async def install_splunk_app(
     stack_id: str,
