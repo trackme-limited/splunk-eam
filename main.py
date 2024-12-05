@@ -737,7 +737,7 @@ async def install_splunk_app(
     )
 
     # Download app tarball
-    app_download_url = f"https://splunkbase.splunk.com/api/v1/app/{splunkbase_app_id}/release/{version}/download/"
+    app_download_url = f"https://splunkbase.splunk.com/api/v2/app/{splunkbase_app_id}/release/{version}/download/"
     response = requests.get(
         app_download_url, headers={"X-Auth-Token": session_id}, stream=True
     )
