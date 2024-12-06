@@ -17,3 +17,14 @@
       shell: >
         {{ splunk_home }}/bin/splunk install app {{ splunk_home }}/etc/apps/{{ splunk_app_name }}.tgz -update 1
       become_user: splunk
+      register: install_app_results
+
+    - name: Display app install result (stdout)
+      debug:
+        msg: "{{ install_app_results.stdout.split('\n') }}"
+      ignore_errors: yes
+
+    - name: Display capp install result (stderr)
+      debug:
+        msg: "{{ install_app_results.stderr.split('\n') }}"
+      ignore_errors: yes
