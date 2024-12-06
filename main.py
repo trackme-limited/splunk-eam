@@ -102,6 +102,12 @@ def save_indexes(stack_id: str, data: dict):
         json.dump(data, f, indent=4)
 
 
+def ensure_stack_dir(stack_id: str):
+    stack_dir = os.path.join(DATA_DIR, stack_id)
+    os.makedirs(stack_dir, exist_ok=True)
+    return stack_dir
+
+
 def run_ansible_playbook(
     stack_id: str,
     playbook_name: str,
@@ -379,12 +385,6 @@ def delete_stack(stack_id: str):
             )
 
     return {"message": "Stack deleted successfully"}
-
-
-def ensure_stack_dir(stack_id: str):
-    stack_dir = os.path.join(DATA_DIR, stack_id)
-    os.makedirs(stack_dir, exist_ok=True)
-    return stack_dir
 
 
 # GET /stacks/{stack_id}/inventory
