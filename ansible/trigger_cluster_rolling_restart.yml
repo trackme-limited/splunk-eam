@@ -1,0 +1,26 @@
+---
+- name: Trigger Indexer Cluster Rolling Restart
+  hosts: all
+  become: yes
+  vars:
+    splunk_home: "/opt/splunk"
+    splunk_port: "8089"
+
+  tasks:
+    - name: Trigger Cluster Rolling Restart
+      shell: >
+        {{ splunk_home }}/bin/splunk rolling-restart cluster-peers
+        --answer-yes
+        -auth '{{ splunk_username }}:{{ splunk_password }}'
+      become_user: splunk
+      register: cmd_rolling_restart
+
+    - name: Display cluster rolling restart bundle results (stdout)
+      debug:
+        msg: "{{ cmd_rolling_restart.stdout.split('\n') }}"
+      ignore_errors: yes
+
+    - name: Display cluster rolling restart bundle results (stderr)
+      debug:
+        msg: "{{ cmd_rolling_restart.stderr.split('\n') }}"
+      ignore_errors: yes
