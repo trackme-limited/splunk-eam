@@ -977,9 +977,6 @@ async def install_splunk_app(
     # Init the ansible_vars
     ansible_vars = {}
 
-    if stack_details["enterprise_deployment_type"] != "standalone":
-        ansible_vars.update({"shc_deployer_node": stack_details["shc_deployer_node"]})
-
     # Trigger Rolling Restart
     if stack_details["shc_cluster"]:
         ansible_vars = {}
