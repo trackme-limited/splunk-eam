@@ -9,8 +9,8 @@
 
   tasks:
     - name: Upload app tarball
-      copy:
-        src: "{{ splunk_app_tarball }}"
+      ansible.builtin.copy:
+        src: "{{ splunk_app_name }}.tgz"
         dest: "/tmp/{{ splunk_app_name }}.tgz"
 
     - name: Install app using Splunk CLI
@@ -28,3 +28,16 @@
       debug:
         msg: "{{ install_app_results.stderr.split('\n') }}"
       ignore_errors: yes
+
+    - name: Remove app tarball after extraction
+      ansible.builtin.file:
+        path: "/tmp/{{ splunk_app_name }}.tgz"
+        state: absent
+
+    - name: Set ownership and permissions
+      ansible.builtin.file:
+        path: "{{ splunk_home }}/etc/apps/{{ splunk_app_name }}"
+        state: directory
+        owner: splunk
+        group: splunk
+        recurse: yes
