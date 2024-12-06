@@ -125,7 +125,12 @@ def run_ansible_playbook(
         )
 
     # Ensure the credentials file exists if required
-    if "apply_cluster_bundle" in playbook_name or "apply_shc_bundle" in playbook_name:
+    if playbook_name in (
+        "apply_cluster_bundle",
+        "apply_shc_bundle",
+        "trigger_cluster_rolling_restart",
+        "trigger_shc_rolling_restart",
+    ):
         if not creds:
             raise HTTPException(
                 status_code=400,
