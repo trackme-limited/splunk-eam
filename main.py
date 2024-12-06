@@ -669,7 +669,7 @@ async def add_index(
         }
 
 
-@app.post("/stacks/{stack_id}/indexes/{index_name}")
+@app.post("/stacks/{stack_id}/indexes/{index_name}/delete")
 async def delete_index(
     stack_id: str,
     index_name: str,
