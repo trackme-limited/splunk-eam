@@ -112,7 +112,6 @@ def run_ansible_playbook(
 ):
     stack_dir, inventory_path, ssh_key_path = get_stack_paths(stack_id)
 
-    # Validate stack data
     if not os.path.exists(stack_dir):
         raise HTTPException(status_code=404, detail=f"Stack '{stack_id}' not found.")
     if not os.path.exists(inventory_path):
@@ -124,28 +123,11 @@ def run_ansible_playbook(
             status_code=400, detail=f"SSH key not found for stack '{stack_id}'."
         )
 
-    # Ensure the credentials file exists if required
-    if playbook_name in (
-        "apply_cluster_bundle",
-        "apply_shc_bundle",
-        "trigger_cluster_rolling_restart",
-        "trigger_shc_rolling_restart",
-    ):
-        if not creds:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Splunk credentials not provided for stack '{stack_id}'. Please ensure to submit splunk_username and splunk_password.",
-            )
-
-        # Inject credentials into ansible_vars
+    if creds:
         if ansible_vars is None:
             ansible_vars = {}
-        ansible_vars.update(
-            {
-                "splunk_username": creds["username"],
-                "splunk_password": creds["password"],
-            }
-        )
+        ansible_vars["splunk_username"] = creds["username"]
+        ansible_vars["splunk_password"] = creds["password"]
 
     playbook_dir = "/app/ansible"
     command = [
@@ -162,7 +144,7 @@ def run_ansible_playbook(
     ]
 
     if limit:
-        command.extend(["--limit", limit])  # Add --limit option if specified
+        command.extend(["--limit", limit])
 
     # Retrieve the stack details to get the Python interpreter
     if stack_id:
@@ -965,7 +947,7 @@ async def delete_splunk_app(
 
 
 @app.post("/stacks/{stack_id}/shc_rolling_restart")
-async def install_splunk_app(
+async def shc_rolling_restart(
     stack_id: str,
     splunk_username: str = Body(..., embed=True),
     splunk_password: str = Body(..., embed=True),
@@ -998,7 +980,7 @@ async def install_splunk_app(
 
 
 @app.post("/stacks/{stack_id}/cluster_rolling_restart")
-async def install_splunk_app(
+async def cluster_rolling_restart(
     stack_id: str,
     splunk_username: str = Body(..., embed=True),
     splunk_password: str = Body(..., embed=True),
