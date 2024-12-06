@@ -11,11 +11,11 @@
     - name: Upload app tarball
       copy:
         src: "{{ splunk_app_tarball }}"
-        dest: "{{ splunk_home }}/etc/apps/{{ splunk_app_name }}.tgz"
+        dest: "/tmp/{{ splunk_app_name }}.tgz"
 
     - name: Install app using Splunk CLI
       shell: >
-        {{ splunk_home }}/bin/splunk install app {{ splunk_home }}/etc/apps/{{ splunk_app_name }}.tgz -update 1
+        {{ splunk_home }}/bin/splunk install app /tmp/{{ splunk_app_name }}.tgz -update 1
       become_user: splunk
       register: install_app_results
 
