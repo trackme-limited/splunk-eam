@@ -1,0 +1,73 @@
+---
+- name: Trigger SHC Rolling Restart
+  hosts: all
+  become: yes
+  vars:
+    splunk_home: "/opt/splunk"
+    splunk_port: "8089"
+    shc_members: []
+    splunk_username: ""
+    splunk_password: ""
+
+  tasks:
+    - name: Ensure SHC members are provided
+      fail:
+        msg: "SHC members must be provided as a list in the variable 'shc_members'."
+      when: shc_members | length == 0
+
+    - name: Select an SHC member to query
+      set_fact:
+        shc_member: "{{ shc_members[0] }}"
+
+    - name: Get SHC status from a member
+      shell: >
+        {{ splunk_home }}/bin/splunk show shcluster-status
+        -auth '{{ splunk_username }}:{{ splunk_password }}'
+        -uri https://{{ shc_member }}:{{ splunk_port }}
+      register: shcluster_status
+      when: inventory_hostname == shc_deployer_node
+
+    - name: "Wait for SHC service_ready_flag : 1"
+      shell: "{{ splunk_home }}/bin/splunk show shcluster-status -uri https://{{ shc_member }}:{{ splunk_port }} -auth '{{ splunk_username }}:{{ splunk_password }}' | grep service_ready_flag"
+      become_user: splunk
+      register: result
+      until: result.stdout.find('1') != -1
+      retries: 90
+      delay: 10
+
+    - debug: msg="{{ result.stdout }}"
+
+    - name: "Wait for SHC captain conf_replication to reach all members"
+      shell: "{{ splunk_home }}/bin/splunk show shcluster-status -uri https://{{ shc_member }}:{{ splunk_port }} -auth '{{ splunk_username }}:{{ splunk_password }}' | grep last_conf_replication"
+      become_user: splunk
+      register: result
+      until: result.stdout.find('Pending') == -1
+      retries: 90
+      delay: 10
+
+    - debug: msg="{{ result.stdout }}"
+
+    - name: "Wait for SHC kvstore ready status"
+      shell: "{{ splunk_home }}/bin/splunk show kvstore-status -uri https://{{ shc_member }}:{{ splunk_port }} -auth '{{ splunk_username }}:{{ splunk_password }}' | grep status"
+      become_user: splunk
+      register: result
+      until: result.stdout.find('ready') != -1
+      retries: 90
+      delay: 10
+
+    - debug: msg="{{ result.stdout }}"
+
+    - name: Trigger SHC Rolling Restart
+      shell: >
+        {{ splunk_home }}/bin/splunk rolling-restart shcluster-members
+        -uri https://{{ shc_member }}:{{ splunk_port }}
+        --answer-yes
+        -auth '{{ splunk_username }}:{{ splunk_password }}'
+      become_user: splunk
+      register: shc_rolling_restart_result
+      when: inventory_hostname == shc_deployer_node
+
+    - name: Display Rolling Restart request results (stdout)
+      debug:
+        msg: "{{ shc_rolling_restart_result.stdout.split('\n') }}"
+      when: inventory_hostname == shc_deployer_node

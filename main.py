@@ -957,3 +957,43 @@ async def delete_splunk_app(
         "message": f"App {splunkbase_app_name} deleted successfully",
         "remaining_apps": installed_apps,
     }
+
+
+@app.post("/stacks/{stack_id}/shc_rolling_restart")
+async def install_splunk_app(
+    stack_id: str,
+    splunk_username: str = Body(..., embed=True),
+    splunk_password: str = Body(..., embed=True),
+):
+    stack_details = load_stack_file(stack_id)
+    stack_dir, inventory_path, ssh_key_path = get_stack_paths(stack_id)
+
+    # Only for SHC
+    if stack_details["enterprise_deployment_type"] == "standalone":
+        raise HTTPException(
+            status_code=400, detail="SHC cluster is not enabled for this stack."
+        )
+
+    # Init the ansible_vars
+    ansible_vars = {}
+
+    if stack_details["enterprise_deployment_type"] != "standalone":
+        ansible_vars.update({"shc_deployer_node": stack_details["shc_deployer_node"]})
+
+    # Trigger Rolling Restart
+    if stack_details["shc_cluster"]:
+        ansible_vars = {}
+        ansible_vars["shc_deployer_node"] = stack_details["shc_deployer_node"]
+        ansible_vars["shc_members"] = stack_details["shc_members"]
+        run_ansible_playbook(
+            stack_id,
+            "trigger_shc_rolling_restart.yml",
+            inventory_path,
+            ansible_vars=ansible_vars,
+            limit=stack_details["shc_deployer_node"],
+            creds={"username": splunk_username, "password": splunk_password},
+        )
+
+    return {
+        "message": "SHC Rolling Restart triggered successfully",
+    }
