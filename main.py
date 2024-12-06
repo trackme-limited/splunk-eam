@@ -1,6 +1,6 @@
 from fastapi import FastAPI, HTTPException, Body
 from pydantic import BaseModel
-from typing import Dict
+from typing import Dict, Optional, List
 import logging
 import json
 import os
@@ -35,10 +35,10 @@ if not os.path.exists(MAIN_FILE):
 class Stack(BaseModel):
     stack_id: str
     enterprise_deployment_type: str  # "distributed" or "standalone"
-    shc_cluster: bool
-    cluster_manager_node: str = None  # Optional unless distributed
-    shc_deployer_node: str = None  # Optional unless shc_cluster
-    shc_members: list = None  # Optional unless shc_cluster
+    shc_cluster: Optional[bool] = None  # Optional unless distributed with SHC
+    cluster_manager_node: Optional[str] = None  # Optional unless distributed
+    shc_deployer_node: Optional[str] = None  # Optional unless SHC cluster
+    shc_members: Optional[List[str]] = None  # Optional unless SHC cluster
     ansible_python_interpreter: str = "/usr/bin/python3"  # Default Python interpreter
 
 
