@@ -309,19 +309,26 @@ def create_stack(stack: Stack):
             detail="cluster_manager_node is required for distributed deployments.",
         )
 
-    # Validate SHC deployer node if SHC cluster is true
-    if stack.shc_cluster and not stack.shc_deployer_node:
-        raise HTTPException(
-            status_code=400,
-            detail="shc_deployer_node is required for SHC cluster setups.",
-        )
+    # Validate SHC deployer node and members only if SHC cluster is enabled
+    if stack.enterprise_deployment_type == "distributed" and stack.shc_cluster:
+        if not stack.shc_deployer_node:
+            raise HTTPException(
+                status_code=400,
+                detail="shc_deployer_node is required for SHC cluster setups.",
+            )
+        if not stack.shc_members:
+            raise HTTPException(
+                status_code=400,
+                detail="shc_members is required for SHC cluster setups.",
+            )
 
-    # Validate SHC members if SHC cluster is true
-    if stack.shc_cluster and not stack.shc_members:
-        raise HTTPException(
-            status_code=400,
-            detail="shc_members is required for SHC cluster setups.",
-        )
+    # Ensure standalone stacks do not have cluster-specific fields
+    if stack.enterprise_deployment_type == "standalone":
+        if stack.shc_cluster or stack.shc_deployer_node or stack.shc_members:
+            raise HTTPException(
+                status_code=400,
+                detail="Standalone stacks should not have cluster-related fields.",
+            )
 
     # Save stack data
     main_data = load_main_file()
