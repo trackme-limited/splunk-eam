@@ -669,12 +669,12 @@ async def add_index(
         }
 
 
-@app.post("/stacks/{stack_id}/indexes/{index_name}/delete")
+@app.delete("/stacks/{stack_id}/indexes/{index_name}")
 async def delete_index(
     stack_id: str,
     index_name: str,
-    splunk_username: str = Body(..., embed=True),
-    splunk_password: str = Body(..., embed=True),
+    splunk_username: str,
+    splunk_password: str,
 ):
     # Load indexes and validate
     indexes = load_indexes(stack_id)
@@ -741,16 +741,7 @@ async def delete_index(
             creds={"username": splunk_username, "password": splunk_password},
         )
 
-    if stack_details["enterprise_deployment_type"] == "distributed":
-        return {
-            "message": "Index deleted successfully, the cluster bundle was pushed automatically.",
-            "index": index_name,
-        }
-    else:
-        return {
-            "message": "Index deleted successfully, Splunk must be restarted for this take effect, you can trigger Splunk restart using the restart_splunk endpoint.",
-            "index": index_name,
-        }
+    return {"message": "Index deleted successfully"}
 
 
 @app.get("/stacks/{stack_id}/installed_apps")
