@@ -1009,3 +1009,42 @@ async def cluster_rolling_restart(
     return {
         "message": "Indexer Cluster Rolling Restart triggered successfully",
     }
+
+
+@app.post("/stacks/{stack_id}/restart_splunk")
+async def restart_splunk(
+    stack_id: str,
+    limit: str = Body(None, embed=True),  # Optional limit parameter
+):
+    stack_details = load_stack_file(stack_id)
+    stack_dir, inventory_path, ssh_key_path = get_stack_paths(stack_id)
+
+    # Trigger Splunk service restart
+    ansible_vars = {}
+
+    # Format the limit if provided
+    limit_hosts = None
+    if limit:
+        if isinstance(limit, str):
+            limit_hosts = ",".join([host.strip() for host in limit.split(",")])
+
+    # If environment is distributed, limit is mandatory
+    if stack_details["enterprise_deployment_type"] != "standalone":
+        if not limit_hosts:
+            raise HTTPException(
+                status_code=400,
+                detail="Limit parameter is required for distributed deployments.",
+            )
+
+    run_ansible_playbook(
+        stack_id,
+        "restart_splunk.yml",
+        inventory_path,
+        ansible_vars=ansible_vars,
+        limit=limit_hosts,
+        creds=None,
+    )
+
+    return {
+        "message": f"Splunk Restart triggered successfully for {'specified hosts' if limit_hosts else 'all hosts'}.",
+    }

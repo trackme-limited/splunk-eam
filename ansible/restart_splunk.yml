@@ -1,0 +1,28 @@
+---
+- name: Restart Splunk Service
+  hosts: all
+  become: yes
+  vars:
+    splunk_service_name: "splunk" # Service name for Splunk
+    splunk_port: "8089" # Splunk management port
+  tasks:
+    - name: Restart the Splunk service
+      systemd:
+        name: "{{ splunk_service_name }}"
+        state: restarted
+      become_user: root
+
+    - name: Wait for Splunk startup
+      wait_for: port={{ splunk_port }} timeout=120
+      ignore_errors: yes
+
+    - name: Verify the Splunk service status
+      systemd:
+        name: "{{ splunk_service_name }}"
+        state: started
+      become_user: root
+      register: splunk_status
+
+    - name: Display Splunk service status
+      debug:
+        msg: "Splunk service restart successful. Status: {{ splunk_status }}"
