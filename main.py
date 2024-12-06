@@ -657,7 +657,16 @@ async def add_index(
             creds={"username": splunk_username, "password": splunk_password},
         )
 
-    return {"message": "Index added successfully", "index": indexes[name]}
+    if stack_details["enterprise_deployment_type"] == "distributed":
+        return {
+            "message": "Index added successfully, the cluster bundle was pushed automatically.",
+            "index": indexes[name],
+        }
+    else:
+        return {
+            "message": "Index added successfully, Splunk must be restarted for this take effect, you can trigger Splunk restart using the restart_splunk endpoint.",
+            "index": indexes[name],
+        }
 
 
 @app.delete("/stacks/{stack_id}/indexes/{index_name}")
