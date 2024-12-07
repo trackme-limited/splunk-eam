@@ -765,49 +765,71 @@ HTTP Methods: GET, POST
 
 # GET /stacks/{stack_id}/inventory
 @app.get("/stacks/{stack_id}/inventory")
-async def get_inventory(stack_id: str):
-    stack_dir = ensure_stack_dir(stack_id)
-    inventory_path = os.path.join(stack_dir, "inventory.ini")
-
-    if not os.path.exists(inventory_path):
-        raise HTTPException(status_code=404, detail="Inventory file not found.")
-
+async def get_inventory_endpoint(stack_id: str):
+    """
+    Retrieve the Ansible inventory for a given stack.
+    """
     try:
-        with open(inventory_path, "r") as f:
-            inventory_data = f.read()
-    except Exception as e:
-        raise HTTPException(
-            status_code=500, detail=f"Error reading inventory: {str(e)}"
-        )
+        # Fetch inventory from Redis
+        inventory_data = get_inventory(stack_id)
 
-    return {"stack_id": stack_id, "inventory": inventory_data}
+        # Return inventory data
+        return {"stack_id": stack_id, "inventory": inventory_data}
+
+    except HTTPException as e:
+        # Re-raise HTTPException (e.g., 404 from get_inventory)
+        raise e
+    except Exception as e:
+        # Handle unexpected errors
+        logger.error(f"Error retrieving inventory for stack '{stack_id}': {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Unable to retrieve inventory for stack '{stack_id}'.",
+        )
 
 
 # POST /stacks/{stack_id}/inventory
 @app.post("/stacks/{stack_id}/inventory")
-async def upload_inventory(stack_id: str, inventory: Dict):
-    # Ensure the stack exists
-    stack_dir = ensure_stack_dir(stack_id)
-
-    # Convert inventory JSON to Ansible INI format
-    inventory_path = os.path.join(stack_dir, "inventory.ini")
+async def upload_inventory_endpoint(stack_id: str, inventory: Dict):
+    """
+    Upload and save the Ansible inventory for a given stack.
+    """
     try:
-        with open(inventory_path, "w") as f:
-            for group, group_data in inventory.items():
-                f.write(f"[{group}]\n")
-                for host, vars_dict in group_data.get("hosts", {}).items():
-                    vars_line = " ".join(
-                        f"{key}={value}" for key, value in vars_dict.items()
-                    )
-                    f.write(f"{host} {vars_line}\n")
-                f.write("\n")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error saving inventory: {str(e)}")
+        # Validate if the stack exists in Redis
+        if not redis_client.exists(f"stack:{stack_id}:metadata"):
+            raise HTTPException(status_code=404, detail="Stack not found.")
 
-    return {
-        "message": f"Inventory for stack '{stack_id}' saved successfully",
-        "path": inventory_path,
-    }
+        # Convert inventory JSON to INI format
+        ini_inventory = []
+        for group, group_data in inventory.items():
+            ini_inventory.append(f"[{group}]")
+            for host, vars_dict in group_data.get("hosts", {}).items():
+                vars_line = " ".join(
+                    f"{key}={value}" for key, value in vars_dict.items()
+                )
+                ini_inventory.append(f"{host} {vars_line}")
+            ini_inventory.append("")  # Add a blank line between groups
+
+        # Join the INI lines into a single string
+        ini_inventory_str = "\n".join(ini_inventory)
+
+        # Save the inventory to Redis
+        save_inventory(stack_id, ini_inventory_str)
+
+        return {
+            "message": f"Inventory for stack '{stack_id}' saved successfully",
+            "stack_id": stack_id,
+        }
+
+    except HTTPException as e:
+        # Re-raise HTTPException (e.g., 404 for missing stack)
+        raise e
+    except Exception as e:
+        # Handle unexpected errors
+        logger.error(f"Error saving inventory for stack '{stack_id}': {e}")
+        raise HTTPException(
+            status_code=500, detail=f"Unable to save inventory for stack '{stack_id}'."
+        )
 
 
 """
