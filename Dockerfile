@@ -36,13 +36,14 @@ RUN mkdir -p /app/logs
 USER root
 RUN mkdir -p /var/run/redis && \
     mkdir -p /app/config && \
+    mkdir -p /app/redis_data && \
     chown deployer:deployer /var/run/redis && \
     chown -R deployer:deployer /app
 COPY redis.conf /app/config/redis.conf
 
 # Copy the entrypoint script
-COPY entrypoint.sh /app/entrypoint.sh
-RUN chmod +x /app/entrypoint.sh
+COPY entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
 
 # Switch to the "deployer" user
 USER deployer
@@ -54,4 +55,4 @@ EXPOSE 8443
 ENV ANSIBLE_SSH_ARGS="-o StrictHostKeyChecking=no"
 
 # Command to run Redis and the application
-CMD ["/app/entrypoint.sh"]
+CMD ["/entrypoint.sh"]
