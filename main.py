@@ -230,7 +230,12 @@ class Stack(BaseModel):
 
 # Redis-based helper functions
 def get_all_stacks():
-    return redis_client.hgetall("stacks")
+    stacks = redis_client.hgetall("stacks")
+    # Deserialize JSON strings into Python dictionaries
+    return {
+        stack_id: json.loads(stack_metadata)
+        for stack_id, stack_metadata in stacks.items()
+    }
 
 
 def save_stack_metadata(stack_id, metadata):
