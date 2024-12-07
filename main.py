@@ -712,7 +712,24 @@ HTTP Methods: GET, DELETE
 # GET /stacks/{stack_id}
 @app.get("/stacks/{stack_id}")
 def get_stack(stack_id: str):
-    return load_stack_file(stack_id)
+    """
+    Retrieve the details of a specific stack using its stack_id.
+    """
+    try:
+        # Retrieve stack metadata from Redis
+        metadata_json = redis_client.hget("stacks", stack_id)
+        if not metadata_json:
+            raise HTTPException(status_code=404, detail="Stack not found.")
+
+        # Parse the metadata JSON
+        metadata = json.loads(metadata_json)
+        return {"stack_id": stack_id, "metadata": metadata}
+
+    except Exception as e:
+        logger.error(f"Error retrieving stack '{stack_id}': {e}")
+        raise HTTPException(
+            status_code=500, detail=f"Unable to retrieve stack '{stack_id}'."
+        )
 
 
 # DELETE /stacks/{stack_id}
