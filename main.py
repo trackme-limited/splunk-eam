@@ -5,6 +5,7 @@ from typing import Dict, Optional, List
 import logging
 from logging.handlers import TimedRotatingFileHandler
 import gzip
+import redis
 import json
 import os
 import subprocess
@@ -110,6 +111,16 @@ if compress_logs:
         os.remove(source_path)
 
     file_handler.rotator = compress_rotated_log
+
+# Redis connection details
+REDIS_HOST = "localhost"
+REDIS_PORT = 6379
+REDIS_DB = 0
+
+# Initialize Redis client
+redis_client = redis.StrictRedis(
+    host=REDIS_HOST, port=REDIS_PORT, db=REDIS_DB, decode_responses=True
+)
 
 app = FastAPI()
 
