@@ -27,6 +27,7 @@ RUN mkdir -p /app/data/ansible_tmp
 # Create a default configuration file
 RUN mkdir -p /app/config
 COPY splunk_eam_config.json /app/config/splunk_eam_config.json
+COPY uvicorn_logging.json /app/config/uvicorn_logging.json
 
 # Create a log directory
 RUN mkdir -p /app/logs

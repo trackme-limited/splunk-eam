@@ -14,4 +14,4 @@ done
 echo "Redis is ready. Starting application..."
 
 # Start the application
-exec uvicorn main:app --host 0.0.0.0 --port 8443 --log-level debug
+exec uvicorn main:app --host 0.0.0.0 --port 8443 --log-config /app/config/uvicorn_logging.json

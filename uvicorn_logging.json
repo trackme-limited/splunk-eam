@@ -1,0 +1,46 @@
+{
+    "version": 1,
+    "disable_existing_loggers": false,
+    "formatters": {
+      "default": {
+        "format": "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+      }
+    },
+    "handlers": {
+      "console": {
+        "class": "logging.StreamHandler",
+        "formatter": "default",
+        "stream": "ext://sys.stdout"
+      },
+      "file": {
+        "class": "logging.handlers.TimedRotatingFileHandler",
+        "formatter": "default",
+        "filename": "/app/logs/splunk-eam.log",
+        "when": "midnight",
+        "interval": 1,
+        "backupCount": 7
+      }
+    },
+    "loggers": {
+      "splunk-eam": {
+        "level": "INFO",
+        "handlers": ["console", "file"],
+        "propagate": false
+      },
+      "uvicorn": {
+        "level": "INFO",
+        "handlers": ["console", "file"],
+        "propagate": false
+      },
+      "uvicorn.access": {
+        "level": "INFO",
+        "handlers": ["console", "file"],
+        "propagate": false
+      }
+    },
+    "root": {
+      "level": "INFO",
+      "handlers": ["console", "file"]
+    }
+  }
+  
