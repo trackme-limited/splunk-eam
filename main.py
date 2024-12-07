@@ -1,4 +1,5 @@
-from fastapi import FastAPI, HTTPException, Body, get_openapi
+from fastapi import FastAPI, HTTPException, Body
+from fastapi.openapi.utils import get_openapi
 from pydantic import BaseModel
 from typing import Dict, Optional, List
 import logging
