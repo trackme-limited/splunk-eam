@@ -1004,7 +1004,7 @@ async def get_indexes_endpoint(stack_id: str):
 
 # POST /stacks/{stack_id}/indexes
 @app.post("/stacks/{stack_id}/indexes")
-async def add_index_endpoint(
+async def add_index(
     stack_id: str,
     splunk_username: str = Body(..., embed=True),
     splunk_password: str = Body(..., embed=True),
@@ -1014,10 +1014,6 @@ async def add_index_endpoint(
     apply_cluster_bundle: bool = Body(True, embed=True),  # Optional, default true
     apply_shc_bundle: bool = Body(True, embed=True),  # Optional, default true
 ):
-    # Validate the stack existence
-    if not redis_client.exists(f"stack:{stack_id}:metadata"):
-        raise HTTPException(status_code=404, detail=f"Stack '{stack_id}' not found.")
-
     # Validate inputs
     if datatype not in [None, "event", "metric"]:
         raise HTTPException(
@@ -1025,120 +1021,92 @@ async def add_index_endpoint(
         )
 
     # Set defaults
-    maxDataSizeMB = maxDataSizeMB or 500 * 1024  # Default to 500 GB in MB
+    maxDataSizeMB = maxDataSizeMB or 500 * 1024  # 500 GB in MB
     datatype = datatype or "event"
 
-    # Retrieve existing indexes
-    indexes = redis_client.hgetall(f"stack:{stack_id}:indexes")
+    # Load and update indexes
+    indexes = load_indexes(stack_id)
     if name in indexes:
-        raise HTTPException(status_code=400, detail=f"Index '{name}' already exists.")
+        raise HTTPException(status_code=400, detail="Index already exists.")
+    indexes[name] = {"maxDataSizeMB": maxDataSizeMB, "datatype": datatype}
+    save_indexes(stack_id, indexes)
 
-    # Save the new index
-    index_data = {"maxDataSizeMB": maxDataSizeMB, "datatype": datatype}
-    redis_client.hset(f"stack:{stack_id}:indexes", name, json.dumps(index_data))
-
-    # Retrieve metadata for playbook execution
+    # Prepare Ansible variables
     stack_metadata = redis_client.hgetall(f"stack:{stack_id}:metadata")
     if not stack_metadata:
-        raise HTTPException(
-            status_code=404, detail=f"Metadata for stack '{stack_id}' not found."
+        raise HTTPException(status_code=404, detail="Stack metadata not found.")
+
+    ansible_vars = {
+        "index_name": name,
+        "maxDataSizeMB": maxDataSizeMB,
+        "datatype": datatype,
+    }
+
+    if stack_metadata["enterprise_deployment_type"] == "distributed":
+        # Push to cluster manager
+        ansible_vars["file_path"] = (
+            "/opt/splunk/etc/manager-apps/001_splunk_aem/local/indexes.conf"
+        )
+        run_ansible_playbook(
+            stack_id=stack_id,
+            playbook_name="add_index.yml",
+            ansible_vars=ansible_vars,
+            limit=stack_metadata["cluster_manager_node"],
+            creds={"username": splunk_username, "password": splunk_password},
         )
 
-    enterprise_type = stack_metadata["enterprise_deployment_type"]
-    ssh_key_path = os.path.join("/data", stack_id, "ssh_private")
-
-    # Create temporary inventory file
-    inventory_data = redis_client.get(f"stack:{stack_id}:inventory")
-    if not inventory_data:
-        redis_client.hdel(f"stack:{stack_id}:indexes", name)  # Rollback
-        raise HTTPException(status_code=404, detail="Inventory not found in Redis.")
-
-    temp_inventory_path = f"/tmp/{stack_id}_inventory.ini"
-    try:
-        with open(temp_inventory_path, "w") as f:
-            f.write(inventory_data)
-
-        # Prepare Ansible variables
-        ansible_vars = {
-            "index_name": name,
-            "maxDataSizeMB": maxDataSizeMB,
-            "datatype": datatype,
-        }
-
-        if enterprise_type == "distributed":
-            # Push to cluster manager
-            ansible_vars["file_path"] = (
-                "/opt/splunk/etc/manager-apps/001_splunk_aem/local/indexes.conf"
-            )
+        # Apply cluster bundle if enabled
+        if apply_cluster_bundle:
             run_ansible_playbook(
-                stack_id,
-                "add_index.yml",
-                temp_inventory_path,
-                ansible_vars=ansible_vars,
+                stack_id=stack_id,
+                playbook_name="apply_cluster_bundle.yml",
                 limit=stack_metadata["cluster_manager_node"],
                 creds={"username": splunk_username, "password": splunk_password},
             )
 
-            # Apply cluster bundle if requested
-            if apply_cluster_bundle:
-                run_ansible_playbook(
-                    stack_id,
-                    "apply_cluster_bundle.yml",
-                    temp_inventory_path,
-                    limit=stack_metadata["cluster_manager_node"],
-                    creds={"username": splunk_username, "password": splunk_password},
-                )
-
-            # Handle SHC, if enabled
-            if stack_metadata.get("shc_cluster") == "True":
-                ansible_vars["file_path"] = (
-                    "/opt/splunk/etc/shcluster/apps/001_splunk_aem/local/indexes.conf"
-                )
-                run_ansible_playbook(
-                    stack_id,
-                    "add_index.yml",
-                    temp_inventory_path,
-                    ansible_vars=ansible_vars,
-                    limit=stack_metadata["shc_deployer_node"],
-                    creds={"username": splunk_username, "password": splunk_password},
-                )
-                if apply_shc_bundle:
-                    run_ansible_playbook(
-                        stack_id,
-                        "apply_shc_bundle.yml",
-                        temp_inventory_path,
-                        limit=stack_metadata["shc_deployer_node"],
-                        creds={
-                            "username": splunk_username,
-                            "password": splunk_password,
-                        },
-                    )
-
-        elif enterprise_type == "standalone":
+        # Push to SHC if enabled
+        if stack_metadata.get("shc_cluster", "false").lower() == "true":
             ansible_vars["file_path"] = (
-                "/opt/splunk/etc/apps/001_splunk_aem/local/indexes.conf"
+                "/opt/splunk/etc/shcluster/apps/001_splunk_aem/local/indexes.conf"
             )
             run_ansible_playbook(
-                stack_id,
-                "add_index.yml",
-                temp_inventory_path,
+                stack_id=stack_id,
+                playbook_name="add_index.yml",
                 ansible_vars=ansible_vars,
-                limit="all",
+                limit=stack_metadata["shc_deployer_node"],
                 creds={"username": splunk_username, "password": splunk_password},
             )
 
-    except Exception as e:
-        # Rollback in case of failure
-        redis_client.hdel(f"stack:{stack_id}:indexes", name)
-        raise HTTPException(status_code=500, detail=f"Error running playbook: {str(e)}")
-    finally:
-        # Cleanup temporary inventory file
-        if os.path.exists(temp_inventory_path):
-            os.remove(temp_inventory_path)
+            # Apply SHC bundle if enabled
+            if apply_shc_bundle:
+                run_ansible_playbook(
+                    stack_id=stack_id,
+                    playbook_name="apply_shc_bundle.yml",
+                    limit=stack_metadata["shc_deployer_node"],
+                    creds={"username": splunk_username, "password": splunk_password},
+                )
+
+    else:
+        # Standalone deployment
+        ansible_vars["file_path"] = (
+            "/opt/splunk/etc/apps/001_splunk_aem/local/indexes.conf"
+        )
+        run_ansible_playbook(
+            stack_id=stack_id,
+            playbook_name="add_index.yml",
+            ansible_vars=ansible_vars,
+            limit="all",
+            creds={"username": splunk_username, "password": splunk_password},
+        )
 
     return {
-        "message": f"Index '{name}' added successfully.",
-        "details": index_data,
+        "message": "Index added successfully."
+        + (
+            " Cluster bundle and/or SHC bundle were applied."
+            if apply_cluster_bundle or apply_shc_bundle
+            else " Bundle application skipped."
+        ),
+        "index": indexes[name],
     }
 
 
@@ -1152,16 +1120,17 @@ async def delete_index_endpoint(
     apply_cluster_bundle: bool = Body(True, embed=True),  # Optional, default true
     apply_shc_bundle: bool = Body(True, embed=True),  # Optional, default true
 ):
-    # Validate the stack existence
+    # Validate stack existence
     if not redis_client.exists(f"stack:{stack_id}:metadata"):
         raise HTTPException(status_code=404, detail=f"Stack '{stack_id}' not found.")
 
-    # Load indexes and validate the presence of the index to delete
+    # Load and validate the index
     indexes = redis_client.hgetall(f"stack:{stack_id}:indexes")
     if index_name not in indexes:
         raise HTTPException(status_code=404, detail=f"Index '{index_name}' not found.")
 
     # Remove the index from Redis
+    removed_index_data = indexes.pop(index_name, None)
     redis_client.hdel(f"stack:{stack_id}:indexes", index_name)
 
     # Retrieve stack metadata
@@ -1171,9 +1140,7 @@ async def delete_index_endpoint(
             status_code=404, detail=f"Metadata for stack '{stack_id}' not found."
         )
 
-    enterprise_type = stack_metadata["enterprise_deployment_type"]
-
-    # Create temporary inventory file from Redis
+    # Create temporary inventory file
     inventory_data = redis_client.get(f"stack:{stack_id}:inventory")
     if not inventory_data:
         raise HTTPException(
@@ -1189,6 +1156,7 @@ async def delete_index_endpoint(
         ansible_vars = {
             "index_name": index_name,
         }
+        enterprise_type = stack_metadata["enterprise_deployment_type"]
 
         if enterprise_type == "distributed":
             # Remove from cluster manager
@@ -1196,9 +1164,9 @@ async def delete_index_endpoint(
                 "/opt/splunk/etc/manager-apps/001_splunk_aem/local/indexes.conf"
             )
             run_ansible_playbook(
-                stack_id,
-                "remove_index.yml",
-                temp_inventory_path,
+                stack_id=stack_id,
+                playbook_name="remove_index.yml",
+                inventory_path=temp_inventory_path,
                 ansible_vars=ansible_vars,
                 limit=stack_metadata["cluster_manager_node"],
                 creds={"username": splunk_username, "password": splunk_password},
@@ -1207,9 +1175,9 @@ async def delete_index_endpoint(
             # Apply cluster bundle if requested
             if apply_cluster_bundle:
                 run_ansible_playbook(
-                    stack_id,
-                    "apply_cluster_bundle.yml",
-                    temp_inventory_path,
+                    stack_id=stack_id,
+                    playbook_name="apply_cluster_bundle.yml",
+                    inventory_path=temp_inventory_path,
                     limit=stack_metadata["cluster_manager_node"],
                     creds={"username": splunk_username, "password": splunk_password},
                 )
@@ -1220,9 +1188,9 @@ async def delete_index_endpoint(
                     "/opt/splunk/etc/shcluster/apps/001_splunk_aem/local/indexes.conf"
                 )
                 run_ansible_playbook(
-                    stack_id,
-                    "remove_index.yml",
-                    temp_inventory_path,
+                    stack_id=stack_id,
+                    playbook_name="remove_index.yml",
+                    inventory_path=temp_inventory_path,
                     ansible_vars=ansible_vars,
                     limit=stack_metadata["shc_deployer_node"],
                     creds={"username": splunk_username, "password": splunk_password},
@@ -1231,9 +1199,9 @@ async def delete_index_endpoint(
                 # Apply SHC bundle if requested
                 if apply_shc_bundle:
                     run_ansible_playbook(
-                        stack_id,
-                        "apply_shc_bundle.yml",
-                        temp_inventory_path,
+                        stack_id=stack_id,
+                        playbook_name="apply_shc_bundle.yml",
+                        inventory_path=temp_inventory_path,
                         ansible_vars={},
                         limit=stack_metadata["shc_deployer_node"],
                         creds={
@@ -1248,20 +1216,23 @@ async def delete_index_endpoint(
                 "/opt/splunk/etc/apps/001_splunk_aem/local/indexes.conf"
             )
             run_ansible_playbook(
-                stack_id,
-                "remove_index.yml",
-                temp_inventory_path,
+                stack_id=stack_id,
+                playbook_name="remove_index.yml",
+                inventory_path=temp_inventory_path,
                 ansible_vars=ansible_vars,
                 limit="all",
                 creds={"username": splunk_username, "password": splunk_password},
             )
 
     except Exception as e:
-        # Rollback by re-adding the index to Redis
-        redis_client.hset(f"stack:{stack_id}:indexes", index_name, indexes[index_name])
+        # Rollback in case of an error
+        if removed_index_data:
+            redis_client.hset(
+                f"stack:{stack_id}:indexes", index_name, removed_index_data
+            )
         raise HTTPException(status_code=500, detail=f"Error running playbook: {str(e)}")
     finally:
-        # Cleanup temporary inventory file
+        # Clean up temporary file
         if os.path.exists(temp_inventory_path):
             os.remove(temp_inventory_path)
 
