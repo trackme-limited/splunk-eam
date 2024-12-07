@@ -345,13 +345,24 @@ def revoke_token(token: str):
     redis_client.delete(token)
 
 
-# Helper functions for individual stack files
-def load_stack_file(stack_id):
-    file_path = os.path.join(DATA_DIR, f"{stack_id}.json")
-    if not os.path.exists(file_path):
-        raise HTTPException(status_code=404, detail="Stack details not found.")
-    with open(file_path, "r") as f:
-        return json.load(f)
+# Helper function to load stack details from Redis
+def load_stack_from_redis(stack_id: str):
+    # Retrieve stack metadata from Redis
+    stack_metadata = redis_client.hgetall(f"stack:{stack_id}:metadata")
+    if not stack_metadata:
+        raise HTTPException(status_code=404, detail=f"Stack '{stack_id}' not found.")
+
+    # Convert Redis hash values back into a Python dictionary
+    stack_details = {
+        key: (
+            json.loads(value)
+            if value.startswith("{") or value.startswith("[")
+            else value
+        )
+        for key, value in stack_metadata.items()
+    }
+
+    return stack_details
 
 
 def save_stack_file(stack_id, data):
@@ -1032,6 +1043,9 @@ async def add_index(
     indexes[name] = {"maxDataSizeMB": maxDataSizeMB, "datatype": datatype}
     save_indexes(stack_id, indexes)
 
+    # Retrieve stack details
+    stack_details = load_stack_from_redis(stack_id)
+
     # Prepare Ansible variables
     stack_metadata = redis_client.hgetall(f"stack:{stack_id}:metadata")
     if not stack_metadata:
@@ -1067,6 +1081,8 @@ async def add_index(
 
         # Push to SHC if enabled
         if stack_metadata.get("shc_cluster", "false").lower() == "true":
+            ansible_vars["shc_deployer_node"] = stack_details["shc_deployer_node"]
+            ansible_vars["shc_members"] = stack_details["shc_members"]
             ansible_vars["file_path"] = (
                 "/opt/splunk/etc/shcluster/apps/001_splunk_aem/local/indexes.conf"
             )
@@ -1103,7 +1119,7 @@ async def add_index(
     return {
         "message": "Index added successfully."
         + (
-            " Cluster bundle and/or SHC bundle were applied."
+            " cluster bundle and Search Head Cluster bundle nust be pushed to reflect this new configuration."
             if apply_cluster_bundle or apply_shc_bundle
             else " Bundle application skipped."
         ),
@@ -1129,6 +1145,9 @@ async def delete_index_endpoint(
     indexes = redis_client.hgetall(f"stack:{stack_id}:indexes")
     if index_name not in indexes:
         raise HTTPException(status_code=404, detail=f"Index '{index_name}' not found.")
+
+    # Retrieve stack details
+    stack_details = load_stack_from_redis(stack_id)
 
     # Remove the index from Redis
     removed_index_data = indexes.pop(index_name, None)
@@ -1259,7 +1278,7 @@ HTTP Method: GET
 async def install_splunk_app(
     stack_id: str,
 ):
-    stack_details = load_stack_file(stack_id)
+    stack_details = load_stack_from_redis(stack_id)
     stack_dir = ensure_stack_dir(stack_id)
     stack_dir, inventory_path, ssh_key_path = get_stack_paths(stack_id)
     files_dir = os.path.join(stack_dir, "files")
@@ -1303,7 +1322,7 @@ async def install_splunk_app(
         True, embed=True
     ),  # Optional parameter with default value
 ):
-    stack_details = load_stack_file(stack_id)
+    stack_details = load_stack_from_redis(stack_id)
     stack_dir = ensure_stack_dir(stack_id)
     stack_dir, inventory_path, ssh_key_path = get_stack_paths(stack_id)
     files_dir = os.path.join("/app/data", "splunk_apps")
@@ -1437,7 +1456,7 @@ async def delete_splunk_app(
         True, embed=True
     ),  # Optional parameter with default value
 ):
-    stack_details = load_stack_file(stack_id)
+    stack_details = load_stack_from_redis(stack_id)
     stack_dir = ensure_stack_dir(stack_id)
     apps_file_path = os.path.join(stack_dir, "stack_apps.json")
     stack_dir, inventory_path, ssh_key_path = get_stack_paths(stack_id)
@@ -1514,7 +1533,7 @@ async def shc_rolling_restart(
     splunk_username: str = Body(..., embed=True),
     splunk_password: str = Body(..., embed=True),
 ):
-    stack_details = load_stack_file(stack_id)
+    stack_details = load_stack_from_redis(stack_id)
     stack_dir, inventory_path, ssh_key_path = get_stack_paths(stack_id)
 
     # Only for SHC
@@ -1555,7 +1574,7 @@ async def cluster_rolling_restart(
     splunk_username: str = Body(..., embed=True),
     splunk_password: str = Body(..., embed=True),
 ):
-    stack_details = load_stack_file(stack_id)
+    stack_details = load_stack_from_redis(stack_id)
     stack_dir, inventory_path, ssh_key_path = get_stack_paths(stack_id)
 
     # Only for SHC
@@ -1594,7 +1613,7 @@ async def restart_splunk(
     stack_id: str,
     limit: str = Body(None, embed=True),  # Optional limit parameter
 ):
-    stack_details = load_stack_file(stack_id)
+    stack_details = load_stack_from_redis(stack_id)
     stack_dir, inventory_path, ssh_key_path = get_stack_paths(stack_id)
 
     # Trigger Splunk service restart
