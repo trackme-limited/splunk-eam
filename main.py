@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, Body
+from fastapi import FastAPI, HTTPException, Body, get_openapi
 from pydantic import BaseModel
 from typing import Dict, Optional, List
 import logging
@@ -295,11 +295,62 @@ async def log_requests(request, call_next):
     return response
 
 
-# GET /stacks
+"""
+Endpoint: /docs/endpoints
+Description: This endpoint lists all available endpoints with their usage and options.
+HttpMethod: GET
+"""
+
+
+# GET /docs/endpoints
+@app.get("/docs/endpoints", summary="List all available endpoints")
+async def list_endpoints():
+    """
+    This endpoint lists all available endpoints with their usage and options.
+    """
+    openapi_schema = get_openapi(
+        title="Splunk Stack Management API",
+        version="1.0.0",
+        description="API for managing Splunk stacks, indexes, and apps.",
+        routes=app.routes,
+    )
+
+    endpoints = []
+    for path, methods in openapi_schema.get("paths", {}).items():
+        for method, details in methods.items():
+            endpoint = {
+                "path": path,
+                "method": method.upper(),
+                "summary": details.get("summary", ""),
+                "description": details.get("description", ""),
+                "parameters": details.get("parameters", []),
+                "requestBody": details.get("requestBody", {}).get("content", {}),
+                "responses": details.get("responses", {}),
+            }
+            endpoints.append(endpoint)
+
+    return {"endpoints": endpoints}
+
+
+"""
+Endpoint: /stacks
+Description: This endpoint allows you to create a new Splunk stack.
+HTTP Method: POST
+"""
+
+
+# POST /stacks
 @app.get("/stacks")
 def get_all_stacks():
     main_data = load_main_file()
     return {"stacks": main_data.get("stacks", [])}
+
+
+"""
+Endpoint: /stacks
+Description: This endpoint allows you to create a new Splunk stack.
+HTTP Method: POST
+"""
 
 
 # POST /stacks
@@ -348,6 +399,13 @@ def create_stack(stack: Stack):
     return {"message": "Stack created successfully", "stack": stack.dict()}
 
 
+"""
+Endpoint: /stacks/{stack_id}
+Description: This endpoint allows you to get, update, or delete a Splunk stack.
+HTTP Methods: GET, DELETE
+"""
+
+
 # GET /stacks/{stack_id}
 @app.get("/stacks/{stack_id}")
 def get_stack(stack_id: str):
@@ -385,6 +443,13 @@ def delete_stack(stack_id: str):
             )
 
     return {"message": "Stack deleted successfully"}
+
+
+"""
+Endpoint: /stacks/{stack_id}/inventory
+Description: This endpoint allows you to get or upload the Ansible inventory file for a stack.
+HTTP Methods: GET, POST
+"""
 
 
 # GET /stacks/{stack_id}/inventory
@@ -434,6 +499,14 @@ async def upload_inventory(stack_id: str, inventory: Dict):
     }
 
 
+"""
+Endpoint: /stacks/{stack_id}/ssh_key
+Description: This endpoint allows you to upload the SSH private key for a stack.
+HTTP Method: POST
+"""
+
+
+# POST /stacks/{stack_id}/ssh_key
 @app.post("/stacks/{stack_id}/ssh_key")
 async def upload_ssh_key(stack_id: str, ssh_key_b64: str = Body(..., embed=True)):
     # Ensure the stack directory exists
@@ -459,6 +532,14 @@ async def upload_ssh_key(stack_id: str, ssh_key_b64: str = Body(..., embed=True)
     }
 
 
+"""
+Endpoint: /stacks/{stack_id}/ansible_test
+Description: This endpoint allows you to test the Ansible connection to the hosts in a stack.
+HTTP Method: POST
+"""
+
+
+# POST /stacks/{stack_id}/ansible_test
 @app.post("/stacks/{stack_id}/ansible_test")
 async def ansible_test(stack_id: str):
     stack_dir, inventory_path, ssh_key_path = get_stack_paths(stack_id)
@@ -545,12 +626,21 @@ async def ansible_test(stack_id: str):
         )
 
 
+"""
+Endpoint: /stacks/{stack_id}/indexes
+Description: This endpoint allows you to get or update the indexes for a stack.
+HTTP Methods: GET, POST
+"""
+
+
+# GET /stacks/{stack_id}/indexes
 @app.get("/stacks/{stack_id}/indexes")
 async def get_indexes(stack_id: str):
     indexes = load_indexes(stack_id)
     return {"stack_id": stack_id, "indexes": indexes}
 
 
+# POST /stacks/{stack_id}/indexes
 @app.post("/stacks/{stack_id}/indexes")
 async def add_index(
     stack_id: str,
@@ -671,6 +761,7 @@ async def add_index(
     }
 
 
+# DELETE /stacks/{stack_id}/indexes/{index_name}
 @app.delete("/stacks/{stack_id}/indexes/{index_name}")
 async def delete_index(
     stack_id: str,
@@ -777,6 +868,14 @@ async def delete_index(
     }
 
 
+"""
+Endpoint: /stacks/{stack_id}/installed_apps
+Description: This endpoint allows you to get the list of installed apps on a stack.
+HTTP Method: GET
+"""
+
+
+# GET /stacks/{stack_id}/installed_apps
 @app.get("/stacks/{stack_id}/installed_apps")
 async def install_splunk_app(
     stack_id: str,
@@ -803,6 +902,14 @@ async def install_splunk_app(
     return installed_apps
 
 
+"""
+Endpoint: /stacks/{stack_id}/install_splunk_app
+Description: This endpoint allows you to install a Splunk app on a stack.
+HTTP Method: POST
+"""
+
+
+# POST /stacks/{stack_id}/install_splunk_app
 @app.post("/stacks/{stack_id}/install_splunk_app")
 async def install_splunk_app(
     stack_id: str,
@@ -933,6 +1040,14 @@ async def install_splunk_app(
     }
 
 
+"""
+Endpoint: /stacks/{stack_id}/delete_splunk_app
+Description: This endpoint allows you to delete a Splunk app from a stack.
+HTTP Method: DELETE
+"""
+
+
+# DELETE /stacks/{stack_id}/delete_splunk_app
 @app.delete("/stacks/{stack_id}/delete_splunk_app")
 async def delete_splunk_app(
     stack_id: str,
@@ -1006,6 +1121,14 @@ async def delete_splunk_app(
     }
 
 
+"""
+Endpoint: /stacks/{stack_id}/shc_rolling_restart
+Description: This endpoint allows you to trigger a rolling restart of an SHC cluster.
+HTTP Method: POST
+"""
+
+
+# POST /stacks/{stack_id}/shc_rolling_restart
 @app.post("/stacks/{stack_id}/shc_rolling_restart")
 async def shc_rolling_restart(
     stack_id: str,
@@ -1039,6 +1162,14 @@ async def shc_rolling_restart(
     }
 
 
+"""
+Endpoint: /stacks/{stack_id}/cluster_rolling_restart
+Description: This endpoint allows you to trigger a rolling restart of an indexer cluster.
+HTTP Method: POST
+"""
+
+
+# POST /stacks/{stack_id}/cluster_rolling_restart
 @app.post("/stacks/{stack_id}/cluster_rolling_restart")
 async def cluster_rolling_restart(
     stack_id: str,
@@ -1071,6 +1202,14 @@ async def cluster_rolling_restart(
     }
 
 
+"""
+Endpoint: /stacks/{stack_id}/restart_splunk
+Description: This endpoint allows you to restart Splunk services on a stack.
+HTTP Method: POST
+"""
+
+
+# POST /stacks/{stack_id}/restart_splunk
 @app.post("/stacks/{stack_id}/restart_splunk")
 async def restart_splunk(
     stack_id: str,
