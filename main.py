@@ -193,9 +193,8 @@ def update_admin_password(request: AdminPasswordUpdate):
 
 @app.post("/create_token")
 def create_token(request: TokenRequest):
-    if request.username != "admin" or request.password != os.getenv(
-        "ADMIN_PASSWORD", "password"
-    ):
+    stored_password = redis_client.get("admin_password")
+    if request.username != "admin" or request.password != stored_password:
         raise HTTPException(status_code=401, detail="Invalid credentials.")
 
     token = create_access_token({"sub": "admin"})
