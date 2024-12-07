@@ -784,7 +784,7 @@ async def install_splunk_app(
     stack_details = load_stack_file(stack_id)
     stack_dir = ensure_stack_dir(stack_id)
     stack_dir, inventory_path, ssh_key_path = get_stack_paths(stack_id)
-    files_dir = os.path.join(stack_dir, "files")
+    files_dir = os.path.join("/app/data", "splunk_apps")
     os.makedirs(files_dir, exist_ok=True)
 
     # Load the apps file to check for existing installations
@@ -816,27 +816,28 @@ async def install_splunk_app(
         )
 
     # Path to the downloaded tarball
-    app_tar_path = os.path.join(files_dir, f"{splunkbase_app_name}.tgz")
+    app_tar_path = os.path.join(files_dir, f"{splunkbase_app_name}_{version}.tgz")
 
     # Log in to Splunk Base
     session_id = login_splunkbase(
         splunkbase_username, splunkbase_password, proxy_dict={}
     )
 
-    # Download app tarball
-    app_download_url = f"https://splunkbase.splunk.com/app/{splunkbase_app_id}/release/{version}/download/"
-    response = requests.get(
-        app_download_url,
-        headers={"X-Auth-Token": session_id},
-        stream=True,
-        allow_redirects=True,
-    )
-
-    if response.status_code != 200:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to download app from Splunk Base: {response.text}",
+    # Download app tarball unless it is already downloaded
+    if not os.path.exists(app_tar_path):
+        app_download_url = f"https://splunkbase.splunk.com/app/{splunkbase_app_id}/release/{version}/download/"
+        response = requests.get(
+            app_download_url,
+            headers={"X-Auth-Token": session_id},
+            stream=True,
+            allow_redirects=True,
         )
+
+        if response.status_code != 200:
+            raise HTTPException(
+                status_code=500,
+                detail=f"Failed to download app from Splunk Base: {response.text}",
+            )
 
     with open(app_tar_path, "wb") as f:
         f.write(response.content)
