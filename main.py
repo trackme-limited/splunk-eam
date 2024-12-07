@@ -140,6 +140,10 @@ redis_client = redis.StrictRedis(
     host=REDIS_HOST, port=REDIS_PORT, db=REDIS_DB, decode_responses=True
 )
 
+# Set default admin password if not already set
+if not redis_client.exists("admin_password"):
+    redis_client.set("admin_password", os.getenv("DEFAULT_ADMIN_PASSWORD", "password"))
+
 # init API
 app = FastAPI()
 
@@ -180,10 +184,10 @@ async def authenticate_request(request, call_next):
 
 @app.post("/update_password")
 def update_admin_password(request: AdminPasswordUpdate):
-    if request.current_password != os.getenv("ADMIN_PASSWORD", "password"):
+    if request.current_password != redis_client.get("admin_password"):
         raise HTTPException(status_code=401, detail="Current password is incorrect.")
 
-    os.environ["ADMIN_PASSWORD"] = request.new_password
+    redis_client.set("admin_password", request.new_password)
     return {"message": "Admin password updated successfully"}
 
 
