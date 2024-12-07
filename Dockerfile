@@ -57,4 +57,3 @@ ENV ANSIBLE_SSH_ARGS="-o StrictHostKeyChecking=no"
 
 # Command to run Redis and the application
 CMD ["/app/entrypoint.sh"]
-#CMD ["sh", "-c", "redis-server /etc/redis/redis.conf & uvicorn main:app --host 0.0.0.0 --port 8443 --log-level debug"]

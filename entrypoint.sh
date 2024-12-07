@@ -2,7 +2,7 @@
 set -e
 
 # Start Redis in the background
-redis-server /etc/redis/redis.conf >/var/log/redis.log 2>&1 &
+redis-server /etc/redis/redis.conf >/app/logs/redis.log 2>&1 &
 echo "Starting Redis server..."
 
 # Wait for Redis to become available
