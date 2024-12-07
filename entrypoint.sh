@@ -13,5 +13,5 @@ done
 
 echo "Redis is ready. Starting application..."
 
-# Start the application and log to both stdout and app.log
-exec uvicorn main:app --host 0.0.0.0 --port 8443 --log-level debug | tee -a /app/logs/splunk-eam.log
+# Start the application
+exec uvicorn main:app --host 0.0.0.0 --port 8443 --log-level debug
