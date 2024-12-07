@@ -353,14 +353,12 @@ def load_stack_from_redis(stack_id: str):
         raise HTTPException(status_code=404, detail=f"Stack '{stack_id}' not found.")
 
     # Convert Redis hash values back into a Python dictionary
-    stack_details = {
-        key: (
-            json.loads(value)
-            if value.startswith("{") or value.startswith("[")
-            else value
-        )
-        for key, value in stack_metadata.items()
-    }
+    stack_details = {}
+    for key, value in stack_metadata.items():
+        try:
+            stack_details[key] = json.loads(value)  # Attempt to parse JSON
+        except json.JSONDecodeError:
+            stack_details[key] = value  # Fallback to plain string
 
     return stack_details
 
