@@ -5,7 +5,7 @@ RUN addgroup --system deployer && adduser --system --ingroup deployer --home /ho
 
 # Install dependencies
 RUN apt-get update && apt-get install -y \
-    procps openssh-client redis-server \
+    procps iputils-ping net-tools openssh-client redis-server \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -42,6 +42,10 @@ COPY redis.conf /etc/redis/redis.conf
 # Set permissions for deployer
 RUN chown -R deployer:deployer /app
 
+# Copy the entrypoint script
+COPY entrypoint.sh /app/entrypoint.sh
+RUN chmod +x /app/entrypoint.sh
+
 # Switch to the "deployer" user
 USER deployer
 
@@ -52,4 +56,5 @@ EXPOSE 8443
 ENV ANSIBLE_SSH_ARGS="-o StrictHostKeyChecking=no"
 
 # Command to run Redis and the application
-CMD ["sh", "-c", "redis-server /etc/redis/redis.conf & uvicorn main:app --host 0.0.0.0 --port 8443 --log-level debug"]
+CMD ["/app/entrypoint.sh"]
+#CMD ["sh", "-c", "redis-server /etc/redis/redis.conf & uvicorn main:app --host 0.0.0.0 --port 8443 --log-level debug"]
