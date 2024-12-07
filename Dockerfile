@@ -14,7 +14,7 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install -r requirements.txt
 
-# Copy the main application file
+# Copy the main application file and directories
 COPY main.py .
 COPY ansible/ /app/ansible/
 
@@ -34,13 +34,10 @@ RUN mkdir -p /app/logs
 # Set up Redis directory and configuration
 USER root
 RUN mkdir -p /var/run/redis && \
-    mkdir -p /etc/redis && \
-    chown redis:redis /var/run/redis && \
-    chown redis:redis /etc/redis
-COPY redis.conf /etc/redis/redis.conf
-
-# Set permissions for deployer
-RUN chown -R deployer:deployer /app
+    mkdir -p /app/config && \
+    chown deployer:deployer /var/run/redis && \
+    chown -R deployer:deployer /app
+COPY redis.conf /app/config/redis.conf
 
 # Copy the entrypoint script
 COPY entrypoint.sh /app/entrypoint.sh
