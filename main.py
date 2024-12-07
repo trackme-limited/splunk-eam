@@ -12,13 +12,34 @@ import re
 import requests
 import xml.etree.ElementTree as ET
 
-# Set up logging
+# Define paths
+CONFIG_DIR = "/app/config"
+CONFIG_FILE = os.path.join(CONFIG_DIR, "splunk_eam_config.json")
+
+# Ensure the config directory exists
+os.makedirs(CONFIG_DIR, exist_ok=True)
+
+# Load configuration
+default_config = {"logging_level": "INFO"}
+if not os.path.exists(CONFIG_FILE):
+    # Create a default config file if it doesn't exist
+    with open(CONFIG_FILE, "w") as f:
+        json.dump(default_config, f, indent=4)
+
+# Read the configuration file
+with open(CONFIG_FILE, "r") as f:
+    config = json.load(f)
+
+# Configure logging
+logging_level = getattr(
+    logging, config.get("logging_level", "INFO").upper(), logging.INFO
+)
 logging.basicConfig(
-    level=logging.DEBUG,  # Set to DEBUG for detailed logs
+    level=logging_level,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
 )
 
-logger = logging.getLogger("main")
+logger = logging.getLogger("splunk-eam")
 
 app = FastAPI()
 
