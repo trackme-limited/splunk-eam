@@ -5,7 +5,7 @@ RUN addgroup --system deployer && adduser --system --ingroup deployer --home /ho
 
 # Install dependencies
 RUN apt-get update && apt-get install -y \
-    procps openssh-client redis-server\
+    procps openssh-client redis-server \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -31,6 +31,14 @@ COPY splunk_eam_config.json /app/config/splunk_eam_config.json
 # Create a log directory
 RUN mkdir -p /app/logs
 
+# Set up Redis directory and configuration
+USER root
+RUN mkdir -p /var/run/redis && \
+    mkdir -p /etc/redis && \
+    chown redis:redis /var/run/redis && \
+    chown redis:redis /etc/redis
+COPY redis.conf /etc/redis/redis.conf
+
 # Set permissions for deployer
 RUN chown -R deployer:deployer /app
 
@@ -43,10 +51,5 @@ EXPOSE 8443
 # Disable SSH strict host key checking for Ansible
 ENV ANSIBLE_SSH_ARGS="-o StrictHostKeyChecking=no"
 
-# Start Redis on container startup
-RUN mkdir -p /var/run/redis
-COPY redis.conf /etc/redis/redis.conf
-RUN chown redis:redis /etc/redis/redis.conf
-
-# Command to run the application
+# Command to run Redis and the application
 CMD ["sh", "-c", "redis-server /etc/redis/redis.conf & uvicorn main:app --host 0.0.0.0 --port 8443 --log-level debug"]
