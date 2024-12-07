@@ -36,7 +36,7 @@ RUN mkdir -p /app/logs
 USER root
 RUN mkdir -p /var/run/redis && \
     mkdir -p /app/config && \
-    mkdir -p /app/redis_data && \
+    mkdir -p /app/data/redis && \
     chown deployer:deployer /var/run/redis && \
     chown -R deployer:deployer /app
 COPY redis.conf /app/config/redis.conf
