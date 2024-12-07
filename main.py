@@ -234,8 +234,10 @@ def get_all_stacks():
 
 
 def save_stack_metadata(stack_id, metadata):
-    redis_client.hset("stacks", stack_id, json.dumps(metadata))
-    redis_client.hmset(f"stack:{stack_id}:metadata", metadata)
+    # Convert all values in metadata to strings
+    metadata_str = {key: str(value) for key, value in metadata.items()}
+    redis_client.hset("stacks", stack_id, json.dumps(metadata_str))
+    redis_client.hmset(f"stack:{stack_id}:metadata", metadata_str)
 
 
 def get_stack_metadata(stack_id):
