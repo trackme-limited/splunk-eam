@@ -1,6 +1,7 @@
 from fastapi import FastAPI, HTTPException, Body
 from fastapi.openapi.utils import get_openapi
 from fastapi.security import HTTPBearer
+from starlette.responses import JSONResponse
 from pydantic import BaseModel, ValidationError
 from typing import Dict, Optional, List
 import logging
@@ -153,12 +154,25 @@ async def authenticate_request(request, call_next):
     ]:  # Exclude these endpoints
         auth_header = request.headers.get("Authorization")
         if not auth_header or not auth_header.startswith("Bearer "):
-            raise HTTPException(
-                status_code=401, detail="Authorization token is missing or invalid."
+            # Return a more detailed error message
+            return JSONResponse(
+                status_code=401,
+                content={
+                    "detail": "Authorization token is missing or invalid. Please provide a valid token."
+                },
             )
 
         token = auth_header.split(" ")[1]
-        verify_token(token)
+        try:
+            verify_token(token)
+        except HTTPException as exc:
+            # Customize the token verification error message
+            return JSONResponse(
+                status_code=exc.status_code,
+                content={
+                    "detail": "Invalid or revoked token. Please authenticate again."
+                },
+            )
 
     response = await call_next(request)
     return response
