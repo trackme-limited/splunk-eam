@@ -559,6 +559,8 @@ async def add_index(
     name: str = Body(..., embed=True),
     maxDataSizeMB: int = Body(None, embed=True),
     datatype: str = Body(None, embed=True),
+    apply_cluster_bundle: bool = Body(True, embed=True),  # Optional, default true
+    apply_shc_bundle: bool = Body(True, embed=True),  # Optional, default true
 ):
     # Validate inputs
     if datatype not in [None, "event", "metric"]:
@@ -606,14 +608,15 @@ async def add_index(
             creds={"username": splunk_username, "password": splunk_password},
         )
 
-        # Apply cluster bundle
-        run_ansible_playbook(
-            stack_id,
-            "apply_cluster_bundle.yml",
-            inventory_path,
-            limit=stack_details["cluster_manager_node"],
-            creds={"username": splunk_username, "password": splunk_password},
-        )
+        # Apply cluster bundle if apply_cluster_bundle is True
+        if apply_cluster_bundle:
+            run_ansible_playbook(
+                stack_id,
+                "apply_cluster_bundle.yml",
+                inventory_path,
+                limit=stack_details["cluster_manager_node"],
+                creds={"username": splunk_username, "password": splunk_password},
+            )
 
         # Push to SHC if enabled
         if stack_details["shc_cluster"]:
@@ -631,8 +634,8 @@ async def add_index(
                 creds={"username": splunk_username, "password": splunk_password},
             )
 
-        # Apply SHC bundle if SHC cluster is enabled
-        if stack_details["shc_cluster"]:
+        # Apply SHC bundle if SHC cluster is enabled and apply_shc_bundle is True
+        if stack_details["shc_cluster"] and apply_shc_bundle:
             run_ansible_playbook(
                 stack_id,
                 "apply_shc_bundle.yml",
@@ -657,24 +660,25 @@ async def add_index(
             creds={"username": splunk_username, "password": splunk_password},
         )
 
-    if stack_details["enterprise_deployment_type"] == "distributed":
-        return {
-            "message": "Index added successfully, the cluster bundle was pushed automatically.",
-            "index": indexes[name],
-        }
-    else:
-        return {
-            "message": "Index added successfully, Splunk must be restarted for this take effect, you can trigger Splunk restart using the restart_splunk endpoint.",
-            "index": indexes[name],
-        }
+    return {
+        "message": "Index added successfully."
+        + (
+            " Cluster bundle and/or SHC bundle were applied."
+            if apply_cluster_bundle or apply_shc_bundle
+            else " Bundle application skipped."
+        ),
+        "index": indexes[name],
+    }
 
 
 @app.delete("/stacks/{stack_id}/indexes/{index_name}")
 async def delete_index(
     stack_id: str,
     index_name: str,
-    splunk_username: str,
-    splunk_password: str,
+    splunk_username: str = Body(..., embed=True),
+    splunk_password: str = Body(..., embed=True),
+    apply_cluster_bundle: bool = Body(True, embed=True),  # Optional, default true
+    apply_shc_bundle: bool = Body(True, embed=True),  # Optional, default true
 ):
     # Load indexes and validate
     indexes = load_indexes(stack_id)
@@ -714,6 +718,16 @@ async def delete_index(
             creds={"username": splunk_username, "password": splunk_password},
         )
 
+        # Apply cluster bundle if apply_cluster_bundle is True
+        if apply_cluster_bundle:
+            run_ansible_playbook(
+                stack_id,
+                "apply_cluster_bundle.yml",
+                inventory_path,
+                limit=stack_details["cluster_manager_node"],
+                creds={"username": splunk_username, "password": splunk_password},
+            )
+
         # Remove from SHC deployer if enabled
         if stack_details["shc_cluster"]:
             ansible_vars["file_path"] = (
@@ -727,6 +741,18 @@ async def delete_index(
                 limit=stack_details["shc_deployer_node"],
                 creds={"username": splunk_username, "password": splunk_password},
             )
+
+        # Apply SHC bundle if SHC cluster is enabled and apply_shc_bundle is True
+        if stack_details["shc_cluster"] and apply_shc_bundle:
+            run_ansible_playbook(
+                stack_id,
+                "apply_shc_bundle.yml",
+                inventory_path,
+                ansible_vars={},
+                limit=stack_details["shc_deployer_node"],
+                creds={"username": splunk_username, "password": splunk_password},
+            )
+
     else:
         # Standalone deployment
         ansible_vars["file_path"] = (
@@ -741,7 +767,14 @@ async def delete_index(
             creds={"username": splunk_username, "password": splunk_password},
         )
 
-    return {"message": "Index deleted successfully"}
+    return {
+        "message": "Index deleted successfully."
+        + (
+            " Cluster bundle and/or SHC bundle were applied."
+            if apply_cluster_bundle or apply_shc_bundle
+            else " Bundle application skipped."
+        )
+    }
 
 
 @app.get("/stacks/{stack_id}/installed_apps")
@@ -780,6 +813,9 @@ async def install_splunk_app(
     splunkbase_app_id: str = Body(..., embed=True),
     splunkbase_app_name: str = Body(..., embed=True),
     version: str = Body(..., embed=True),
+    apply_shc_bundle: bool = Body(
+        True, embed=True
+    ),  # Optional parameter with default value
 ):
     stack_details = load_stack_file(stack_id)
     stack_dir = ensure_stack_dir(stack_id)
@@ -839,9 +875,9 @@ async def install_splunk_app(
                 detail=f"Failed to download app from Splunk Base: {response.text}",
             )
 
-    with open(app_tar_path, "wb") as f:
-        f.write(response.content)
-    logger.info(f"App downloaded successfully: {app_tar_path}")
+        with open(app_tar_path, "wb") as f:
+            f.write(response.content)
+        logger.info(f"App downloaded successfully: {app_tar_path}")
 
     # Ensure Ansible's files directory exists
     ansible_files_dir = "/app/ansible/files"
@@ -877,8 +913,8 @@ async def install_splunk_app(
     with open(apps_file_path, "w") as f:
         json.dump(installed_apps, f, indent=4)
 
-    # Apply SHC bundle if needed
-    if stack_details["shc_cluster"]:
+    # Apply SHC bundle if needed and requested
+    if stack_details["shc_cluster"] and apply_shc_bundle:
         ansible_vars = {}
         ansible_vars["shc_deployer_node"] = stack_details["shc_deployer_node"]
         ansible_vars["shc_members"] = stack_details["shc_members"]
@@ -899,10 +935,14 @@ async def install_splunk_app(
 
 @app.delete("/stacks/{stack_id}/delete_splunk_app")
 async def delete_splunk_app(
-    stack_id: str, splunkbase_app_name: str = Body(..., embed=True)
+    stack_id: str,
+    splunkbase_app_name: str = Body(..., embed=True),
+    splunk_username: str = Body(..., embed=True),
+    splunk_password: str = Body(..., embed=True),
+    apply_shc_bundle: bool = Body(
+        True, embed=True
+    ),  # Optional parameter with default value
 ):
-    splunk_username: str = (Body(..., embed=True),)
-    splunk_password: str = (Body(..., embed=True),)
     stack_details = load_stack_file(stack_id)
     stack_dir = ensure_stack_dir(stack_id)
     apps_file_path = os.path.join(stack_dir, "stack_apps.json")
@@ -944,8 +984,8 @@ async def delete_splunk_app(
         creds={"username": splunk_username, "password": splunk_password},
     )
 
-    # If SHC, apply the bundle
-    if stack_details["shc_cluster"]:
+    # If SHC and apply_shc_bundle is true, apply the bundle
+    if stack_details["shc_cluster"] and apply_shc_bundle:
         run_ansible_playbook(
             stack_id,
             "apply_shc_bundle.yml",
