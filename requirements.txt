@@ -5,3 +5,4 @@ ansible-runner
 requests
 bcrypt
 python-jose[cryptography]
+redis
