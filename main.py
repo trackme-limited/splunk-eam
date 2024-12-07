@@ -1,11 +1,14 @@
 from fastapi import FastAPI, HTTPException, Body
 from fastapi.openapi.utils import get_openapi
+from fastapi.security import HTTPBearer
 from pydantic import BaseModel, ValidationError
 from typing import Dict, Optional, List
 import logging
 from logging.handlers import TimedRotatingFileHandler
 import gzip
 import redis
+from jose import JWTError, jwt
+from datetime import datetime, timedelta
 import json
 import os
 import subprocess
@@ -41,6 +44,20 @@ DEFAULT_CONFIG = {
 class ConfigSchema(BaseModel):
     logging_level: str
     log_rotation: dict
+
+
+class AdminPasswordUpdate(BaseModel):
+    current_password: str
+    new_password: str
+
+
+class TokenRequest(BaseModel):
+    username: str
+    password: str
+
+
+class TokenRevokeRequest(BaseModel):
+    token: str
 
 
 # Load configuration
@@ -122,7 +139,56 @@ redis_client = redis.StrictRedis(
     host=REDIS_HOST, port=REDIS_PORT, db=REDIS_DB, decode_responses=True
 )
 
+
+# Token verification middleware
+@app.middleware("http")
+async def authenticate_request(request, call_next):
+    if request.url.path not in [
+        "/update_password",
+        "/create_token",
+        "/delete_token",
+    ]:  # Exclude these endpoints
+        auth_header = request.headers.get("Authorization")
+        if not auth_header or not auth_header.startswith("Bearer "):
+            raise HTTPException(
+                status_code=401, detail="Authorization token is missing or invalid."
+            )
+
+        token = auth_header.split(" ")[1]
+        verify_token(token)
+
+    response = await call_next(request)
+    return response
+
+
 app = FastAPI()
+
+
+@app.post("/update_password")
+def update_admin_password(request: AdminPasswordUpdate):
+    if request.current_password != os.getenv("ADMIN_PASSWORD", "password"):
+        raise HTTPException(status_code=401, detail="Current password is incorrect.")
+
+    os.environ["ADMIN_PASSWORD"] = request.new_password
+    return {"message": "Admin password updated successfully"}
+
+
+@app.post("/create_token")
+def create_token(request: TokenRequest):
+    if request.username != "admin" or request.password != os.getenv(
+        "ADMIN_PASSWORD", "password"
+    ):
+        raise HTTPException(status_code=401, detail="Invalid credentials.")
+
+    token = create_access_token({"sub": "admin"})
+    return {"access_token": token, "token_type": "bearer"}
+
+
+@app.post("/delete_token")
+def delete_token(request: TokenRevokeRequest):
+    revoke_token(request.token)
+    return {"message": "Token revoked successfully"}
+
 
 # Directory to store stack files
 DATA_DIR = "data"
@@ -154,6 +220,47 @@ def load_main_file():
 def save_main_file(data):
     with open(MAIN_FILE, "w") as f:
         json.dump(data, f, indent=4)
+
+
+# Token Management with Redis
+
+SECRET_KEY = "your_secret_key"  # Use a secure random key in production
+ALGORITHM = "HS256"
+ACCESS_TOKEN_EXPIRE_MINUTES = 60
+
+
+def create_access_token(data: dict, expires_delta: timedelta = None):
+    to_encode = data.copy()
+    expire = datetime.utcnow() + (
+        expires_delta or timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    )
+    to_encode.update({"exp": expire})
+    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+
+    # Store token in Redis with expiration
+    redis_client.setex(
+        encoded_jwt, timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES), "valid"
+    )
+    return encoded_jwt
+
+
+def verify_token(token: str):
+    # Check if token exists in Redis
+    if not redis_client.exists(token):
+        raise HTTPException(
+            status_code=401, detail="Token has been revoked or is invalid."
+        )
+
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        return payload
+    except JWTError:
+        raise HTTPException(status_code=401, detail="Invalid token.")
+
+
+def revoke_token(token: str):
+    # Remove token from Redis
+    redis_client.delete(token)
 
 
 # Helper functions for individual stack files
