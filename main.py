@@ -139,6 +139,9 @@ redis_client = redis.StrictRedis(
     host=REDIS_HOST, port=REDIS_PORT, db=REDIS_DB, decode_responses=True
 )
 
+# init API
+app = FastAPI()
+
 
 # Token verification middleware
 @app.middleware("http")
@@ -159,9 +162,6 @@ async def authenticate_request(request, call_next):
 
     response = await call_next(request)
     return response
-
-
-app = FastAPI()
 
 
 @app.post("/update_password")
