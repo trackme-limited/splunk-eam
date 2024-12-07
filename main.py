@@ -1097,6 +1097,7 @@ async def add_index(
                 run_ansible_playbook(
                     stack_id=stack_id,
                     playbook_name="apply_shc_bundle.yml",
+                    ansible_vars=ansible_vars,
                     limit=stack_metadata["shc_deployer_node"],
                     creds={"username": splunk_username, "password": splunk_password},
                 )
