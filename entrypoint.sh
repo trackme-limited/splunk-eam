@@ -2,7 +2,7 @@
 set -e
 
 # Start Redis in the background
-redis-server /app/config/redis.conf >/app/logs/redis.log 2>&1 &
+redis-server /app/config/redis.conf > >(tee -a /app/logs/redis.log) 2> >(tee -a /app/logs/redis.log >&2) &
 echo "Starting Redis server and logging to /app/logs/redis.log..."
 
 # Wait for Redis to become available
@@ -12,4 +12,6 @@ until redis-cli ping >/dev/null 2>&1; do
 done
 
 echo "Redis is ready. Starting application..."
-exec uvicorn main:app --host 0.0.0.0 --port 8443 --log-level debug >/app/logs/app.log 2>&1
+
+# Start the application and log to both stdout and app.log
+exec uvicorn main:app --host 0.0.0.0 --port 8443 --log-level debug | tee -a /app/logs/splunk-eam.log
