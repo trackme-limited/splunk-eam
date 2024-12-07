@@ -872,32 +872,36 @@ HTTP Method: POST
 """
 
 
-# POST /stacks/{stack_id}/ansible_test
 @app.post("/stacks/{stack_id}/ansible_test")
 async def ansible_test(stack_id: str):
-    stack_dir, inventory_path, ssh_key_path = get_stack_paths(stack_id)
-
-    # Validate stack data
-    if not os.path.exists(stack_dir):
-        raise HTTPException(status_code=404, detail=f"Stack '{stack_id}' not found.")
-    if not os.path.exists(inventory_path):
+    # Retrieve the inventory from Redis
+    inventory_data = redis_client.get(f"stack:{stack_id}:inventory")
+    if not inventory_data:
         raise HTTPException(
-            status_code=400, detail=f"Inventory file not found for stack '{stack_id}'."
+            status_code=404, detail=f"Inventory not found for stack '{stack_id}'."
         )
+
+    # Ensure SSH key exists
+    stack_dir, _, ssh_key_path = get_stack_paths(stack_id)
     if not os.path.exists(ssh_key_path):
         raise HTTPException(
             status_code=400, detail=f"SSH key not found for stack '{stack_id}'."
         )
 
-    # Run Ansible command
+    # Temporarily save the inventory data to a file for Ansible
+    temp_inventory_path = os.path.join(stack_dir, "temp_inventory.ini")
     try:
+        with open(temp_inventory_path, "w") as f:
+            f.write(inventory_data)
+
+        # Run Ansible command
         command = [
             "ansible",
             "-m",
             "ping",
             "all",
             "-i",
-            inventory_path,
+            temp_inventory_path,
             "--private-key",
             ssh_key_path,
             "-e",
@@ -922,10 +926,8 @@ async def ansible_test(stack_id: str):
         structured_output = []
         host_output = {}
         for line in result.stdout.strip().split("\n"):
-            # Match host line
             host_match = re.match(r"^(\S+)\s\|\sSUCCESS\s=>\s{", line)
             if host_match:
-                # Save previous host's output
                 if host_output:
                     structured_output.append(host_output)
                 host_output = {
@@ -933,19 +935,15 @@ async def ansible_test(stack_id: str):
                     "details": {"raw_output": ""},
                 }
             elif host_output:
-                # Append subsequent lines to the current host's raw_output
                 host_output["details"]["raw_output"] += line + "\n"
 
-        # Append the last host's output
         if host_output:
             structured_output.append(host_output)
 
-        # Parse raw JSON if possible
         for host in structured_output:
             try:
                 host["details"] = json.loads(host["details"]["raw_output"].strip())
             except json.JSONDecodeError:
-                # Keep raw_output if parsing fails
                 pass
 
         return {
@@ -957,6 +955,10 @@ async def ansible_test(stack_id: str):
         raise HTTPException(
             status_code=500, detail=f"Error running Ansible test: {str(e)}"
         )
+    finally:
+        # Clean up temporary inventory file
+        if os.path.exists(temp_inventory_path):
+            os.remove(temp_inventory_path)
 
 
 """
