@@ -735,34 +735,25 @@ def get_stack(stack_id: str):
 # DELETE /stacks/{stack_id}
 @app.delete("/stacks/{stack_id}")
 def delete_stack(stack_id: str):
-    main_data = load_main_file()
-    stack_list = [s for s in main_data["stacks"] if s["stack_id"] != stack_id]
+    """
+    Delete a stack and its associated metadata.
+    """
+    try:
+        # Check if the stack exists
+        if not redis_client.hexists("stacks", stack_id):
+            raise HTTPException(status_code=404, detail="Stack not found.")
 
-    if len(stack_list) == len(main_data["stacks"]):
-        raise HTTPException(status_code=404, detail="Stack not found.")
+        # Delete stack metadata and related Redis keys
+        delete_stack_metadata(stack_id)
+        logger.info(f"Stack '{stack_id}' deleted successfully.")
 
-    # Update main file
-    main_data["stacks"] = stack_list
-    save_main_file(main_data)
+        return {"message": f"Stack '{stack_id}' deleted successfully."}
 
-    # Remove individual stack file
-    file_path = os.path.join(DATA_DIR, f"{stack_id}.json")
-    if os.path.exists(file_path):
-        os.remove(file_path)
-
-    # Remove the entire stack directory
-    stack_dir = os.path.join(DATA_DIR, stack_id)
-    if os.path.exists(stack_dir):
-        try:
-            shutil.rmtree(stack_dir)  # Delete the directory and all its contents
-        except Exception as e:
-            logger.error(f"Failed to delete directory {stack_dir}: {e}")
-            raise HTTPException(
-                status_code=500,
-                detail=f"Failed to delete stack directory: {e}",
-            )
-
-    return {"message": "Stack deleted successfully"}
+    except Exception as e:
+        logger.error(f"Error deleting stack '{stack_id}': {e}")
+        raise HTTPException(
+            status_code=500, detail=f"Unable to delete stack '{stack_id}'."
+        )
 
 
 """
