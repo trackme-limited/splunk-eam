@@ -403,81 +403,99 @@ def ensure_stack_dir(stack_id: str):
 def run_ansible_playbook(
     stack_id: str,
     playbook_name: str,
-    inventory_path: str,
     ansible_vars: dict = None,
     limit: str = None,
     creds: dict = None,
 ):
-    stack_dir, inventory_path, ssh_key_path = get_stack_paths(stack_id)
-
-    if not os.path.exists(stack_dir):
-        raise HTTPException(status_code=404, detail=f"Stack '{stack_id}' not found.")
-    if not os.path.exists(inventory_path):
+    # Retrieve stack metadata from Redis
+    stack_metadata = redis_client.hgetall(f"stack:{stack_id}:metadata")
+    if not stack_metadata:
         raise HTTPException(
-            status_code=400, detail=f"Inventory file not found for stack '{stack_id}'."
+            status_code=404, detail=f"Metadata for stack '{stack_id}' not found."
         )
+
+    # Retrieve SSH private key
+    stack_dir, _, ssh_key_path = get_stack_paths(stack_id)
     if not os.path.exists(ssh_key_path):
         raise HTTPException(
             status_code=400, detail=f"SSH key not found for stack '{stack_id}'."
         )
 
-    if creds:
-        if ansible_vars is None:
-            ansible_vars = {}
-        ansible_vars["splunk_username"] = creds["username"]
-        ansible_vars["splunk_password"] = creds["password"]
+    # Retrieve inventory from Redis and create a temporary inventory file
+    inventory_data = redis_client.get(f"stack:{stack_id}:inventory")
+    if not inventory_data:
+        raise HTTPException(
+            status_code=404, detail=f"Inventory not found for stack '{stack_id}'."
+        )
 
-    playbook_dir = "/app/ansible"
-    command = [
-        "ansible-playbook",
-        f"{playbook_dir}/{playbook_name}",
-        "-i",
-        inventory_path,
-        "-e",
-        json.dumps(ansible_vars),
-        "-e",
-        "ansible_ssh_extra_args='-o StrictHostKeyChecking=no'",
-        "--private-key",
-        ssh_key_path,
-    ]
+    temp_inventory_path = f"/tmp/{stack_id}_inventory.ini"
+    try:
+        with open(temp_inventory_path, "w") as f:
+            f.write(inventory_data)
 
-    if limit:
-        command.extend(["--limit", limit])
+        # Include credentials in Ansible variables if provided
+        if creds:
+            if ansible_vars is None:
+                ansible_vars = {}
+            ansible_vars["splunk_username"] = creds["username"]
+            ansible_vars["splunk_password"] = creds["password"]
 
-    # Retrieve the stack details to get the Python interpreter
-    if stack_id:
-        stack_details = load_stack_file(stack_id)
-        ansible_python_interpreter = stack_details.get(
+        # Prepare the Ansible playbook command
+        playbook_dir = "/app/ansible"
+        command = [
+            "ansible-playbook",
+            f"{playbook_dir}/{playbook_name}",
+            "-i",
+            temp_inventory_path,
+            "-e",
+            json.dumps(ansible_vars),
+            "-e",
+            "ansible_ssh_extra_args='-o StrictHostKeyChecking=no'",
+            "--private-key",
+            ssh_key_path,
+        ]
+
+        if limit:
+            command.extend(["--limit", limit])
+
+        # Add Python interpreter if specified in stack metadata
+        ansible_python_interpreter = stack_metadata.get(
             "ansible_python_interpreter", "/usr/bin/python3"
         )
-        # Include the Python interpreter variable
         command.extend(
             ["-e", f"ansible_python_interpreter={ansible_python_interpreter}"]
         )
 
-    # Sanitize the command for logging
-    sanitized_command = command[:]
-    if "splunk_password" in json.dumps(ansible_vars):
-        sanitized_ansible_vars = ansible_vars.copy()
-        sanitized_ansible_vars["splunk_password"] = "*****"
-        sanitized_command[sanitized_command.index("-e") + 1] = json.dumps(
-            sanitized_ansible_vars
-        )
+        # Sanitize the command for logging
+        sanitized_command = command[:]
+        if "splunk_password" in json.dumps(ansible_vars):
+            sanitized_ansible_vars = ansible_vars.copy()
+            sanitized_ansible_vars["splunk_password"] = "*****"
+            sanitized_command[sanitized_command.index("-e") + 1] = json.dumps(
+                sanitized_ansible_vars
+            )
 
-    logger.debug(f"Running Ansible playbook: {sanitized_command}")
+        logger.debug(f"Running Ansible playbook: {sanitized_command}")
 
-    result = subprocess.run(
-        command,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
-    )
-    logger.debug(f"Ansible stdout: {result.stdout}")
-    if result.returncode != 0:
-        logger.error(f"Ansible stderr: {result.stderr}")
-        raise HTTPException(
-            status_code=500, detail=f"Ansible playbook failed: {result.stderr.strip()}"
+        # Run the Ansible playbook
+        result = subprocess.run(
+            command,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
         )
+        logger.debug(f"Ansible stdout: {result.stdout}")
+        if result.returncode != 0:
+            logger.error(f"Ansible stderr: {result.stderr}")
+            raise HTTPException(
+                status_code=500,
+                detail=f"Ansible playbook failed: {result.stderr.strip()}",
+            )
+
+    finally:
+        # Cleanup temporary inventory file
+        if os.path.exists(temp_inventory_path):
+            os.remove(temp_inventory_path)
 
 
 def login_splunkbase(username, password, proxy_dict):
@@ -985,7 +1003,6 @@ async def get_indexes_endpoint(stack_id: str):
 
 
 # POST /stacks/{stack_id}/indexes
-# POST /stacks/{stack_id}/indexes
 @app.post("/stacks/{stack_id}/indexes")
 async def add_index_endpoint(
     stack_id: str,
@@ -1125,7 +1142,6 @@ async def add_index_endpoint(
     }
 
 
-# DELETE /stacks/{stack_id}/indexes/{index_name}
 # DELETE /stacks/{stack_id}/indexes/{index_name}
 @app.delete("/stacks/{stack_id}/indexes/{index_name}")
 async def delete_index_endpoint(
