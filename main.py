@@ -373,25 +373,26 @@ def get_stack_paths(stack_id: str):
     return stack_dir, inventory_path, ssh_key_path
 
 
-def get_indexes_file(stack_id: str):
-    stack_dir = ensure_stack_dir(stack_id)
-    indexes_file = os.path.join(stack_dir, "stack_indexes.json")
-    if not os.path.exists(indexes_file):
-        with open(indexes_file, "w") as f:
-            json.dump({}, f)
-    return indexes_file
-
-
-def load_indexes(stack_id: str):
-    indexes_file = get_indexes_file(stack_id)
-    with open(indexes_file, "r") as f:
-        return json.load(f)
+def get_indexes(stack_id: str) -> dict:
+    """
+    Retrieve all indexes for a given stack from Redis.
+    """
+    if not redis_client.exists(f"stack:{stack_id}:indexes"):
+        return {}
+    indexes = redis_client.hgetall(f"stack:{stack_id}:indexes")
+    # Deserialize JSON values stored in Redis
+    return {key: json.loads(value) for key, value in indexes.items()}
 
 
 def save_indexes(stack_id: str, data: dict):
-    indexes_file = get_indexes_file(stack_id)
-    with open(indexes_file, "w") as f:
-        json.dump(data, f, indent=4)
+    """
+    Save all indexes for a given stack to Redis.
+    """
+    redis_client.delete(f"stack:{stack_id}:indexes")  # Clear existing indexes
+    for index_name, index_data in data.items():
+        redis_client.hset(
+            f"stack:{stack_id}:indexes", index_name, json.dumps(index_data)
+        )
 
 
 def ensure_stack_dir(stack_id: str):
@@ -1025,7 +1026,7 @@ async def add_index(
     datatype = datatype or "event"
 
     # Load and update indexes
-    indexes = load_indexes(stack_id)
+    indexes = get_indexes(stack_id)
     if name in indexes:
         raise HTTPException(status_code=400, detail="Index already exists.")
     indexes[name] = {"maxDataSizeMB": maxDataSizeMB, "datatype": datatype}
