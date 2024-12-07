@@ -24,9 +24,12 @@ RUN mkdir -p /app/data
 # Temporary directory for Ansible
 RUN mkdir -p /app/data/ansible_tmp
 
-# Create a config directory and default configuration file
+# Create a default configuration file
 RUN mkdir -p /app/config
-RUN echo '{"logging_level": "INFO"}' > /app/config/splunk_eam_config.json
+COPY splunk_eam_config.json /app/config/splunk_eam_config.json
+
+# Create a log directory
+RUN mkdir -p /app/logs
 
 # Set permissions for deployer
 RUN chown -R deployer:deployer /app

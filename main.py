@@ -1,8 +1,10 @@
 from fastapi import FastAPI, HTTPException, Body
 from fastapi.openapi.utils import get_openapi
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 from typing import Dict, Optional, List
 import logging
+from logging.handlers import TimedRotatingFileHandler
+import gzip
 import json
 import os
 import subprocess
@@ -12,34 +14,102 @@ import re
 import requests
 import xml.etree.ElementTree as ET
 
-# Define paths
+# Paths
 CONFIG_DIR = "/app/config"
 CONFIG_FILE = os.path.join(CONFIG_DIR, "splunk_eam_config.json")
+LOG_DIR = "/app/logs"
+LOG_FILE = os.path.join(LOG_DIR, "splunk-eam.log")
 
-# Ensure the config directory exists
+# Ensure necessary directories
 os.makedirs(CONFIG_DIR, exist_ok=True)
+os.makedirs(LOG_DIR, exist_ok=True)
+
+# Default configuration
+DEFAULT_CONFIG = {
+    "logging_level": "INFO",
+    "log_rotation": {
+        "when": "midnight",
+        "interval": 1,
+        "backup_count": 7,
+        "compress_logs": True,
+    },
+}
+
+
+# Configuration schema using Pydantic
+class ConfigSchema(BaseModel):
+    logging_level: str
+    log_rotation: dict
+
 
 # Load configuration
-default_config = {"logging_level": "INFO"}
-if not os.path.exists(CONFIG_FILE):
-    # Create a default config file if it doesn't exist
-    with open(CONFIG_FILE, "w") as f:
-        json.dump(default_config, f, indent=4)
+def load_config():
+    if not os.path.exists(CONFIG_FILE):
+        with open(CONFIG_FILE, "w") as f:
+            json.dump(DEFAULT_CONFIG, f, indent=4)
 
-# Read the configuration file
-with open(CONFIG_FILE, "r") as f:
-    config = json.load(f)
+    with open(CONFIG_FILE, "r") as f:
+        config_data = json.load(f)
 
-# Configure logging
-logging_level = getattr(
-    logging, config.get("logging_level", "INFO").upper(), logging.INFO
-)
-logging.basicConfig(
-    level=logging_level,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-)
+    try:
+        return ConfigSchema(**config_data)
+    except ValidationError as e:
+        logging.error(f"Invalid configuration: {e}")
+        return ConfigSchema(**DEFAULT_CONFIG)
 
+
+config = load_config()
+
+# Set logging level
+logging_level = getattr(logging, config.logging_level.upper(), logging.INFO)
+
+# Log rotation settings
+rotation_settings = config.log_rotation
+when = rotation_settings.get("when", "midnight")
+interval = rotation_settings.get("interval", 1)
+backup_count = rotation_settings.get("backup_count", 7)
+compress_logs = rotation_settings.get("compress_logs", True)
+
+# Create logger
 logger = logging.getLogger("splunk-eam")
+logger.setLevel(logging_level)
+
+# Console Handler (Standard Output)
+console_handler = logging.StreamHandler()
+console_handler.setLevel(logging_level)
+console_formatter = logging.Formatter(
+    "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+)
+console_handler.setFormatter(console_formatter)
+logger.addHandler(console_handler)
+
+# File Handler with Timed Rotation
+file_handler = TimedRotatingFileHandler(
+    LOG_FILE,
+    when=when,
+    interval=interval,
+    backupCount=backup_count,
+)
+file_handler.setLevel(logging_level)
+file_formatter = logging.Formatter(
+    "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+)
+file_handler.setFormatter(file_formatter)
+logger.addHandler(file_handler)
+
+# Compression of rotated logs
+if compress_logs:
+
+    def compress_rotated_log(source_path):
+        """Compress rotated logs automatically."""
+        if not source_path.endswith(".log"):
+            return
+        gz_path = f"{source_path}.gz"
+        with open(source_path, "rb") as log_file, gzip.open(gz_path, "wb") as gz_file:
+            gz_file.writelines(log_file)
+        os.remove(source_path)
+
+    file_handler.rotator = compress_rotated_log
 
 app = FastAPI()
 

@@ -1,0 +1,12 @@
+{
+    "logging_level": "INFO",
+    "log_rotation": {
+        "when": "midnight",
+        "interval": 1,
+        "backup_count": 7,
+        "compress_logs": true
+    },
+    "future_settings": {
+        "example_setting": "example_value"
+    }
+}
