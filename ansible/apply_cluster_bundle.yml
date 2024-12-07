@@ -5,6 +5,8 @@
   vars:
     splunk_home: "/opt/splunk"
     splunk_port: "8089"
+    splunk_username: ""
+    splunk_password: ""
 
   tasks:
     - name: Apply cluster bundle

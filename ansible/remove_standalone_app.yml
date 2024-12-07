@@ -5,11 +5,15 @@
   vars:
     splunk_home: "/opt/splunk"
     splunk_app_name: ""
+    splunk_username: ""
+    splunk_password: ""
 
   tasks:
     - name: Remove app using Splunk CLI
       shell: >
         {{ splunk_home }}/bin/splunk remove app {{ splunk_app_name }}
+        --answer-yes
+        -auth '{{ splunk_username }}:{{ splunk_password }}'
       become_user: splunk
       ignore_errors: yes
 

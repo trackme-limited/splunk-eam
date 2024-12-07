@@ -4,8 +4,9 @@
   become: yes
   vars:
     splunk_home: "/opt/splunk"
-    splunk_app_tarball: ""
     splunk_app_name: ""
+    splunk_username: ""
+    splunk_password: ""
 
   tasks:
     - name: Upload app tarball
@@ -16,6 +17,8 @@
     - name: Install app using Splunk CLI
       shell: >
         {{ splunk_home }}/bin/splunk install app /tmp/{{ splunk_app_name }}.tgz -update 1
+        --answer-yes
+        -auth '{{ splunk_username }}:{{ splunk_password }}'
       become_user: splunk
       register: install_app_results
 
