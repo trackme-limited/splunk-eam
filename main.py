@@ -228,6 +228,64 @@ class Stack(BaseModel):
     ansible_python_interpreter: str = "/usr/bin/python3"  # Default Python interpreter
 
 
+# Redis-based helper functions
+def get_all_stacks():
+    return redis_client.hgetall("stacks")
+
+
+def save_stack_metadata(stack_id, metadata):
+    redis_client.hset("stacks", stack_id, json.dumps(metadata))
+    redis_client.hmset(f"stack:{stack_id}:metadata", metadata)
+
+
+def get_stack_metadata(stack_id):
+    if not redis_client.exists(f"stack:{stack_id}:metadata"):
+        raise HTTPException(status_code=404, detail="Stack not found.")
+    return redis_client.hgetall(f"stack:{stack_id}:metadata")
+
+
+def delete_stack_metadata(stack_id):
+    redis_client.hdel("stacks", stack_id)
+    redis_client.delete(f"stack:{stack_id}:metadata")
+    redis_client.delete(f"stack:{stack_id}:inventory")
+    redis_client.delete(f"stack:{stack_id}:indexes")
+    redis_client.delete(f"stack:{stack_id}:apps")
+
+
+def get_inventory(stack_id):
+    if not redis_client.exists(f"stack:{stack_id}:inventory"):
+        raise HTTPException(status_code=404, detail="Inventory not found.")
+    return redis_client.get(f"stack:{stack_id}:inventory")
+
+
+def save_inventory(stack_id, inventory_data):
+    redis_client.set(f"stack:{stack_id}:inventory", inventory_data)
+
+
+def get_indexes(stack_id):
+    return redis_client.hgetall(f"stack:{stack_id}:indexes")
+
+
+def save_index(stack_id, index_name, index_data):
+    redis_client.hset(f"stack:{stack_id}:indexes", index_name, json.dumps(index_data))
+
+
+def delete_index(stack_id, index_name):
+    redis_client.hdel(f"stack:{stack_id}:indexes", index_name)
+
+
+def get_apps(stack_id):
+    return redis_client.hgetall(f"stack:{stack_id}:apps")
+
+
+def save_app(stack_id, app_name, app_data):
+    redis_client.hset(f"stack:{stack_id}:apps", app_name, json.dumps(app_data))
+
+
+def delete_app(stack_id, app_name):
+    redis_client.hdel(f"stack:{stack_id}:apps", app_name)
+
+
 # Helper functions for the main file
 def load_main_file():
     with open(MAIN_FILE, "r") as f:
@@ -567,10 +625,13 @@ HTTP Method: POST
 
 
 # POST /stacks
-@app.get("/stacks")
-def get_all_stacks():
-    main_data = load_main_file()
-    return {"stacks": main_data.get("stacks", [])}
+@app.get("/stacks", summary="Retrieve all stacks", response_model=Dict[str, dict])
+async def get_all_stacks_endpoint():
+    """
+    Retrieve all available stacks.
+    """
+    stacks = get_all_stacks()
+    return {"stacks": stacks}
 
 
 """
@@ -581,8 +642,18 @@ HTTP Method: POST
 
 
 # POST /stacks
-@app.post("/stacks")
-def create_stack(stack: Stack):
+@app.post("/stacks", summary="Create a new stack", status_code=201)
+async def create_stack_endpoint(stack: Stack):
+    """
+    Create a new stack with the provided metadata.
+    """
+    # Check if the stack already exists
+    existing_stacks = get_all_stacks()
+    if stack.stack_id in existing_stacks:
+        raise HTTPException(
+            status_code=400, detail=f"Stack with ID '{stack.stack_id}' already exists."
+        )
+
     # Validate cluster manager node for distributed deployment
     if (
         stack.enterprise_deployment_type == "distributed"
@@ -614,16 +685,14 @@ def create_stack(stack: Stack):
                 detail="Standalone stacks should not have cluster-related fields.",
             )
 
-    # Save stack data
-    main_data = load_main_file()
-    if stack.stack_id in [s["stack_id"] for s in main_data["stacks"]]:
-        raise HTTPException(status_code=400, detail="Stack ID already exists.")
+    # Save the new stack metadata in Redis
+    metadata = stack.dict()
+    save_stack_metadata(stack.stack_id, metadata)
 
-    main_data["stacks"].append(stack.dict())
-    save_main_file(main_data)
-
-    save_stack_file(stack.stack_id, stack.dict())
-    return {"message": "Stack created successfully", "stack": stack.dict()}
+    return {
+        "message": f"Stack '{stack.stack_id}' created successfully.",
+        "stack": metadata,
+    }
 
 
 """
