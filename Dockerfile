@@ -5,7 +5,7 @@ RUN addgroup --system deployer && adduser --system --ingroup deployer --home /ho
 
 # Install dependencies
 RUN apt-get update && apt-get install -y \
-    procps iputils-ping net-tools openssh-client redis-server vim\
+    procps iputils-ping net-tools openssh-client redis-server openssl vim\
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -30,6 +30,9 @@ COPY splunk_eam_config.json /app/config/splunk_eam_config.json
 
 # Create a log directory
 RUN mkdir -p /app/logs
+
+# SSL certs directory
+RUN mkdir -p /app/certs
 
 # Set up Redis directory and configuration
 USER root

@@ -13,5 +13,5 @@ done
 
 echo "Redis is ready. Starting application..."
 
-# Start the application
-exec uvicorn main:app --host 0.0.0.0 --port 8443
+# Start the Python application (main.py handles starting Uvicorn)
+exec python main.py

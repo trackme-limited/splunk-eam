@@ -3,6 +3,8 @@ from fastapi.openapi.utils import get_openapi
 from fastapi.security import HTTPBearer
 from starlette.responses import JSONResponse
 from pydantic import BaseModel, ValidationError
+from OpenSSL import crypto
+import uvicorn
 import secrets
 from typing import Dict, Optional, List
 import logging
@@ -25,10 +27,19 @@ CONFIG_DIR = "/app/config"
 CONFIG_FILE = os.path.join(CONFIG_DIR, "splunk_eam_config.json")
 LOG_DIR = "/app/logs"
 LOG_FILE = os.path.join(LOG_DIR, "splunk-eam.log")
+USE_EXTERNAL_CERT = os.getenv("USE_EXTERNAL_CERT", "false").lower() == "true"
+EXTERNAL_CERT_FILE = os.getenv("EXTERNAL_CERT_FILE", "")
+EXTERNAL_KEY_FILE = os.getenv("EXTERNAL_KEY_FILE", "")
+
+# Paths for certificates
+CERT_DIR = "/app/certs"
+CERT_FILE = os.path.join(CERT_DIR, "ssl_cert.pem")
+KEY_FILE = os.path.join(CERT_DIR, "ssl_key.pem")
 
 # Ensure necessary directories
 os.makedirs(CONFIG_DIR, exist_ok=True)
 os.makedirs(LOG_DIR, exist_ok=True)
+os.makedirs(CERT_DIR, exist_ok=True)
 
 # Default configuration
 DEFAULT_CONFIG = {
@@ -62,6 +73,53 @@ class TokenRequest(BaseModel):
 
 class TokenRevokeRequest(BaseModel):
     token: str
+
+
+# Generate a self-signed SSL certificate
+def generate_self_signed_cert(cert_file, key_file):
+    """
+    Generate a self-signed SSL certificate.
+    """
+    # Create a key pair
+    key = crypto.PKey()
+    key.generate_key(crypto.TYPE_RSA, 2048)
+
+    # Create a self-signed certificate
+    cert = crypto.X509()
+    cert.get_subject().CN = "localhost"
+    cert.set_serial_number(1000)
+    cert.gmtime_adj_notBefore(0)
+    cert.gmtime_adj_notAfter(10 * 365 * 24 * 60 * 60)  # 10 years
+    cert.set_issuer(cert.get_subject())
+    cert.set_pubkey(key)
+    cert.sign(key, "sha256")
+
+    # Write the key and certificate to files
+    with open(cert_file, "wb") as cert_out, open(key_file, "wb") as key_out:
+        cert_out.write(crypto.dump_certificate(crypto.FILETYPE_PEM, cert))
+        key_out.write(crypto.dump_privatekey(crypto.FILETYPE_PEM, key))
+
+    print(f"Generated self-signed certificate at {cert_file}")
+
+
+# Ensure SSL certificates are available
+def ensure_certificates():
+    """
+    Ensure that SSL certificates are available.
+    """
+    if USE_EXTERNAL_CERT:
+        if not (
+            os.path.exists(EXTERNAL_CERT_FILE) and os.path.exists(EXTERNAL_KEY_FILE)
+        ):
+            raise FileNotFoundError("External certificates are enabled but not found.")
+        print("Using external certificates.")
+        return EXTERNAL_CERT_FILE, EXTERNAL_KEY_FILE
+
+    if not (os.path.exists(CERT_FILE) and os.path.exists(KEY_FILE)):
+        print("No certificates found, generating self-signed certificates...")
+        generate_self_signed_cert(CERT_FILE, KEY_FILE)
+
+    return CERT_FILE, KEY_FILE
 
 
 # Load configuration
@@ -1965,3 +2023,17 @@ async def restart_splunk(
         return {
             "message": f"Splunk Restart triggered successfully for hosts: {limit_hosts}",
         }
+
+
+if __name__ == "__main__":
+    # Ensure certificates are available
+    cert_file, key_file = ensure_certificates()
+
+    # Run the FastAPI app with HTTPS
+    uvicorn.run(
+        "main:app",
+        host="0.0.0.0",
+        port=8443,
+        ssl_certfile=cert_file,
+        ssl_keyfile=key_file,
+    )
