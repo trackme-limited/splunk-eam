@@ -1561,6 +1561,172 @@ async def delete_splunk_app(
 
 
 """
+Endpoint: /stacks/{stack_id}/install_private_app
+Description: This endpoint allows you to install a private Splunk app on a stack.
+HTTP Method: POST
+"""
+
+
+# POST /stacks/{stack_id}/install_private_app
+@app.post(
+    "/stacks/{stack_id}/install_private_app", summary="Install a private Splunk app"
+)
+async def install_private_app(
+    stack_id: str,
+    app_base64: str = Body(..., embed=True),  # Base64-encoded tarball
+    app_name: str = Body(..., embed=True),  # Name of the private app
+    splunk_username: str = Body(..., embed=True),
+    splunk_password: str = Body(..., embed=True),
+    target: Optional[str] = Body(None, embed=True),  # Target for distributed stacks
+    apply_shc_bundle: bool = Body(True, embed=True),  # Optional SHC bundle application
+):
+    try:
+        # Retrieve stack details
+        stack_details = load_stack_from_redis(stack_id)
+        enterprise_type = stack_details["enterprise_deployment_type"]
+
+        # Decode and save the tarball
+        files_dir = "/app/data/splunk_private_apps"
+        os.makedirs(files_dir, exist_ok=True)
+        app_tar_path = os.path.join(files_dir, f"{app_name}.tgz")
+        with open(app_tar_path, "wb") as f:
+            f.write(base64.b64decode(app_base64))
+
+        # Copy tarball to Ansible's files directory
+        ansible_files_dir = "/app/ansible/files"
+        os.makedirs(ansible_files_dir, exist_ok=True)
+        ansible_tar_path = os.path.join(ansible_files_dir, f"{app_name}.tgz")
+        shutil.copy(app_tar_path, ansible_tar_path)
+
+        # Select appropriate playbook and target
+        playbook = "install_standalone_app.yml"
+        ansible_vars = {"splunk_app_name": app_name}
+        limit = None
+
+        if enterprise_type == "distributed":
+            if target == "shc":
+                playbook = "install_shc_app.yml"
+                ansible_vars.update(
+                    {
+                        "shc_deployer_node": stack_details["shc_deployer_node"],
+                    }
+                )
+                limit = stack_details["shc_deployer_node"]
+            else:
+                playbook = "install_standalone_app.yml"
+                limit = target
+        else:
+            limit = "all"
+
+        # Run Ansible playbook
+        run_ansible_playbook(
+            stack_id,
+            playbook,
+            ansible_vars=ansible_vars,
+            limit=limit,
+            creds={"username": splunk_username, "password": splunk_password},
+        )
+
+        # Apply SHC bundle if requested
+        if target == "shc" and apply_shc_bundle:
+            run_ansible_playbook(
+                stack_id,
+                "apply_shc_bundle.yml",
+                ansible_vars={
+                    "shc_deployer_node": stack_details["shc_deployer_node"],
+                    "shc_members": stack_details["shc_members"],
+                },
+                limit=stack_details["shc_deployer_node"],
+                creds={"username": splunk_username, "password": splunk_password},
+            )
+
+        return {
+            "message": f"Private app '{app_name}' installed successfully.",
+        }
+
+    except Exception as e:
+        error_message = f'Error installing private app "{app_name}": {str(e)}'
+        logger.error(error_message)
+        raise HTTPException(status_code=500, detail=error_message)
+
+
+"""
+Endpoint: /stacks/{stack_id}/delete_private_app
+Description: This endpoint allows you to remove a private Splunk app from a stack.
+HTTP Method: DELETE
+"""
+
+
+# DELETE /stacks/{stack_id}/delete_private_app
+@app.delete(
+    "/stacks/{stack_id}/delete_private_app", summary="Remove a private Splunk app"
+)
+async def remove_private_app(
+    stack_id: str,
+    app_name: str = Query(...),  # Name of the private app
+    splunk_username: str = Query(...),
+    splunk_password: str = Query(...),
+    target: Optional[str] = Query(None),  # Target for distributed stacks
+    apply_shc_bundle: bool = Query(True),  # Optional SHC bundle application
+):
+    try:
+        # Retrieve stack details
+        stack_details = load_stack_from_redis(stack_id)
+        enterprise_type = stack_details["enterprise_deployment_type"]
+
+        # Select appropriate playbook and target
+        playbook = "remove_standalone_app.yml"
+        ansible_vars = {"splunk_app_name": app_name}
+        limit = None
+
+        if enterprise_type == "distributed":
+            if target == "shc":
+                playbook = "remove_shc_app.yml"
+                ansible_vars.update(
+                    {
+                        "shc_deployer_node": stack_details["shc_deployer_node"],
+                    }
+                )
+                limit = stack_details["shc_deployer_node"]
+            else:
+                playbook = "remove_standalone_app.yml"
+                limit = target
+        else:
+            limit = "all"
+
+        # Run Ansible playbook
+        run_ansible_playbook(
+            stack_id,
+            playbook,
+            ansible_vars=ansible_vars,
+            limit=limit,
+            creds={"username": splunk_username, "password": splunk_password},
+        )
+
+        # Apply SHC bundle if requested
+        if target == "shc" and apply_shc_bundle:
+            run_ansible_playbook(
+                stack_id,
+                "apply_shc_bundle.yml",
+                ansible_vars={
+                    "shc_deployer_node": stack_details["shc_deployer_node"],
+                    "shc_members": stack_details["shc_members"],
+                },
+                limit=stack_details["shc_deployer_node"],
+                creds={"username": splunk_username, "password": splunk_password},
+            )
+
+        return {
+            "message": f"Private app '{app_name}' removed successfully.",
+        }
+
+    except Exception as e:
+        error_message = f'Error removing private app "{app_name}": {str(e)}'
+        logger.error(error_message)
+        raise HTTPException(status_code=500, detail=error_message)
+
+
+"""
 Endpoint: /stacks/{stack_id}/shc_rolling_restart
 Description: This endpoint allows you to trigger a rolling restart of an SHC cluster.
 HTTP Method: POST
