@@ -21,7 +21,7 @@ Splunk AEM provides a RESTful API to manage Splunk Enterprise environments:
 - Trigger Splunk restarts programmatically, on distributed or standalone environments.
 - Trigger Splunk Indexer Cluster rolling restarts programmatically.
 - Trigger Splunk Search Head Cluster rolling restarts programmatically.
-- Highly flexible, listening port, SSL configuration can easily be modified up to your requirements.
+- Flexibility, listening port and SSL settings can be customised easily, you can also create your own endpoints and your own Ansible playbooks.
 - Secured by default, the API is SSL based as a default, and requires default credentials to be updated before endpoints can be used.
 
 ## Requirements and Installation
