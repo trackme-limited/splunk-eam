@@ -6,7 +6,5 @@
         "backup_count": 7,
         "compress_logs": true
     },
-    "future_settings": {
-        "example_setting": "example_value"
-    }
+    "token_expiration_minutes": 43200
 }

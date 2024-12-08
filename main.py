@@ -3,6 +3,7 @@ from fastapi.openapi.utils import get_openapi
 from fastapi.security import HTTPBearer
 from starlette.responses import JSONResponse
 from pydantic import BaseModel, ValidationError
+import secrets
 from typing import Dict, Optional, List
 import logging
 from logging.handlers import TimedRotatingFileHandler
@@ -38,6 +39,7 @@ DEFAULT_CONFIG = {
         "backup_count": 7,
         "compress_logs": True,
     },
+    "token_expiration_minutes": 43200,
 }
 
 
@@ -326,12 +328,40 @@ def save_main_file(data):
 
 # Token Management with Redis
 
-SECRET_KEY = "your_secret_key"  # Use a secure random key in production
+# Paths
+AUTH_DIR = "/app/data/auth"
+SECRET_KEY_FILE = os.path.join(AUTH_DIR, "secret_key.txt")
+
+# Ensure data directory exists
+os.makedirs(AUTH_DIR, exist_ok=True)
+
+
+# Generate or load the secret key
+def get_or_create_secret_key():
+    """
+    Generate a secure random secret key and persist it for reuse.
+    """
+    if not os.path.exists(SECRET_KEY_FILE):
+        # Generate a secure random key
+        secret_key = secrets.token_hex(32)  # 64-character hex string
+        with open(SECRET_KEY_FILE, "w") as f:
+            f.write(secret_key)
+        print(f"Generated and saved new secret key to {SECRET_KEY_FILE}")
+    else:
+        # Load the existing key
+        with open(SECRET_KEY_FILE, "r") as f:
+            secret_key = f.read().strip()
+        print(f"Loaded existing secret key from {SECRET_KEY_FILE}")
+    return secret_key
+
+
+# Assign the secret key
+SECRET_KEY = get_or_create_secret_key()
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 60
+ACCESS_TOKEN_EXPIRE_MINUTES = config.token_expiration_minutes
 
 
-def create_access_token(data: dict, expires_delta: timedelta = None):
+def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     to_encode = data.copy()
     expire = datetime.utcnow() + (
         expires_delta or timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
@@ -339,11 +369,38 @@ def create_access_token(data: dict, expires_delta: timedelta = None):
     to_encode.update({"exp": expire})
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
-    # Store token in Redis with expiration
+    # Store token in Redis with the appropriate expiration
     redis_client.setex(
-        encoded_jwt, timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES), "valid"
+        encoded_jwt,
+        expires_delta or timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES),
+        "valid",
     )
     return encoded_jwt
+
+
+@app.post("/refresh_token", summary="Refresh an access token")
+def refresh_token(token: str = Body(..., embed=True)):
+    """
+    Refresh a valid token to extend its expiration.
+    """
+    try:
+        # Verify the existing token
+        payload = verify_token(token)
+
+        # Revoke the old token
+        revoke_token(token)
+
+        # Create a new token with the same data
+        new_token = create_access_token({"sub": payload["sub"]})
+
+        return {"access_token": new_token, "token_type": "bearer"}
+
+    except HTTPException as e:
+        logger.error(f"Error refreshing token: {e.detail}")
+        raise
+    except Exception as e:
+        logger.error(f"Unexpected error during token refresh: {str(e)}")
+        raise HTTPException(status_code=500, detail="Unable to refresh token.")
 
 
 def verify_token(token: str):
