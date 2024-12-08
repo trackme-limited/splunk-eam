@@ -1204,7 +1204,7 @@ async def add_index(
     save_indexes(stack_id, indexes)
 
     return {
-        "message": "Index added successfully, ensure to push the cluster bundle and Search Head Cluster bundle to reflect this new configuration.",
+        "message": "Index added successfully, for distributed stacks, push the bundle to reflect this new configuration, on standalone stacks, ensure to restart Splunk.",
         "index": indexes[name],
     }
 
