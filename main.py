@@ -1045,7 +1045,6 @@ async def add_index(
     if name in indexes:
         raise HTTPException(status_code=400, detail="Index already exists.")
     indexes[name] = {"maxDataSizeMB": maxDataSizeMB, "datatype": datatype}
-    save_indexes(stack_id, indexes)
 
     # Retrieve stack details
     stack_details = load_stack_from_redis(stack_id)
@@ -1120,6 +1119,9 @@ async def add_index(
             limit="all",
             creds={"username": splunk_username, "password": splunk_password},
         )
+
+    # Save the updated indexes to Redis
+    save_indexes(stack_id, indexes)
 
     return {
         "message": "Index added successfully, ensure to push the cluster bundle and Search Head Cluster bundle to reflect this new configuration.",
