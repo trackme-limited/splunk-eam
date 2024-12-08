@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, Body
+from fastapi import FastAPI, HTTPException, Body, Query
 from fastapi.openapi.utils import get_openapi
 from fastapi.security import HTTPBearer
 from starlette.responses import JSONResponse
@@ -1134,10 +1134,10 @@ async def add_index(
 async def delete_index_endpoint(
     stack_id: str,
     index_name: str,
-    splunk_username: str = Body(..., embed=True),
-    splunk_password: str = Body(..., embed=True),
-    apply_cluster_bundle: bool = Body(True, embed=True),  # Optional, default true
-    apply_shc_bundle: bool = Body(True, embed=True),  # Optional, default true
+    splunk_username: str = Query(...),
+    splunk_password: str = Query(...),
+    apply_cluster_bundle: bool = Query(True),  # Optional, default true
+    apply_shc_bundle: bool = Query(True),  # Optional, default true
 ):
     # Validate stack existence
     if not redis_client.exists(f"stack:{stack_id}:metadata"):
