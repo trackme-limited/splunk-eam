@@ -515,7 +515,7 @@ def run_ansible_playbook(
             for part in sanitized_command
         ]
 
-        logger.debug(f"Running Ansible playbook: {sanitized_command}")
+        logger.info(f"Running Ansible playbook: {sanitized_command}")
 
         # Run the Ansible playbook
         result = subprocess.run(
@@ -524,7 +524,7 @@ def run_ansible_playbook(
             stderr=subprocess.PIPE,
             text=True,
         )
-        logger.debug(f"Ansible stdout: {result.stdout}")
+        logger.info(f"Ansible stdout: {result.stdout}")
         if result.returncode != 0:
             logger.error(f"Ansible stderr: {result.stderr}")
             raise HTTPException(
@@ -1574,8 +1574,8 @@ HTTP Method: POST
 )
 async def shc_rolling_restart(
     stack_id: str,
-    splunk_username: str = Query(..., description="Splunk admin username"),
-    splunk_password: str = Query(..., description="Splunk admin password"),
+    splunk_username: str = Body(..., embed=True),
+    splunk_password: str = Body(..., embed=True),
 ):
     try:
         # Retrieve stack details from Redis
