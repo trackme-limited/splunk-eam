@@ -6,3 +6,4 @@ requests
 bcrypt
 python-jose[cryptography]
 redis
+pyOpenSSL
