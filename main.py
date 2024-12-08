@@ -1432,18 +1432,19 @@ async def install_splunk_app(
         )
 
         # Apply SHC bundle if needed and requested
-        if stack_details.get("shc_cluster") and apply_shc_bundle:
-            ansible_vars = {
-                "shc_deployer_node": stack_details["shc_deployer_node"],
-                "shc_members": stack_details["shc_members"],
-            }
-            run_ansible_playbook(
-                stack_id,
-                "apply_shc_bundle.yml",
-                ansible_vars=ansible_vars,
-                limit=stack_details["shc_deployer_node"],
-                creds={"username": splunk_username, "password": splunk_password},
-            )
+        if stack_details["enterprise_deployment_type"] != "standalone":
+            if stack_details.get("shc_cluster") and apply_shc_bundle:
+                ansible_vars = {
+                    "shc_deployer_node": stack_details["shc_deployer_node"],
+                    "shc_members": stack_details["shc_members"],
+                }
+                run_ansible_playbook(
+                    stack_id,
+                    "apply_shc_bundle.yml",
+                    ansible_vars=ansible_vars,
+                    limit=stack_details["shc_deployer_node"],
+                    creds={"username": splunk_username, "password": splunk_password},
+                )
 
         return {
             "message": "App installed successfully",
