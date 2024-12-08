@@ -1424,13 +1424,6 @@ async def install_splunk_app(
             creds={"username": splunk_username, "password": splunk_password},
         )
 
-        # Update Redis with the new app details
-        redis_client.hset(
-            f"stack:{stack_id}:apps",
-            splunkbase_app_name,
-            json.dumps({"id": splunkbase_app_id, "version": version}),
-        )
-
         # Apply SHC bundle if needed and requested
         if stack_details["enterprise_deployment_type"] != "standalone":
             if stack_details.get("shc_cluster") and apply_shc_bundle:
@@ -1445,6 +1438,13 @@ async def install_splunk_app(
                     limit=stack_details["shc_deployer_node"],
                     creds={"username": splunk_username, "password": splunk_password},
                 )
+
+        # Update Redis with the new app details
+        redis_client.hset(
+            f"stack:{stack_id}:apps",
+            splunkbase_app_name,
+            json.dumps({"id": splunkbase_app_id, "version": version}),
+        )
 
         return {
             "message": "App installed successfully",
@@ -1521,18 +1521,19 @@ async def delete_splunk_app(
         )
 
         # If SHC and apply_shc_bundle is true, apply the SHC bundle
-        if stack_details.get("shc_cluster") and apply_shc_bundle:
-            ansible_vars = {
-                "shc_deployer_node": stack_details["shc_deployer_node"],
-                "shc_members": stack_details["shc_members"],
-            }
-            run_ansible_playbook(
-                stack_id,
-                "apply_shc_bundle.yml",
-                ansible_vars=ansible_vars,
-                limit=stack_details["shc_deployer_node"],
-                creds={"username": splunk_username, "password": splunk_password},
-            )
+        if stack_details["enterprise_deployment_type"] != "standalone":
+            if stack_details.get("shc_cluster") and apply_shc_bundle:
+                ansible_vars = {
+                    "shc_deployer_node": stack_details["shc_deployer_node"],
+                    "shc_members": stack_details["shc_members"],
+                }
+                run_ansible_playbook(
+                    stack_id,
+                    "apply_shc_bundle.yml",
+                    ansible_vars=ansible_vars,
+                    limit=stack_details["shc_deployer_node"],
+                    creds={"username": splunk_username, "password": splunk_password},
+                )
 
         # Remove the app from Redis
         redis_client.hdel(f"stack:{stack_id}:apps", splunkbase_app_name)
