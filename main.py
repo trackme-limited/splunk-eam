@@ -1122,12 +1122,7 @@ async def add_index(
         )
 
     return {
-        "message": "Index added successfully."
-        + (
-            " cluster bundle and Search Head Cluster bundle nust be pushed to reflect this new configuration."
-            if apply_cluster_bundle or apply_shc_bundle
-            else " Bundle application skipped."
-        ),
+        "message": "Index added successfully, ensure to push the cluster bundle and Search Head Cluster bundle to reflect this new configuration.",
         "index": indexes[name],
     }
 
@@ -1153,10 +1148,6 @@ async def delete_index_endpoint(
 
     # Retrieve stack details
     stack_details = load_stack_from_redis(stack_id)
-
-    # Remove the index from Redis
-    removed_index_data = indexes.pop(index_name, None)
-    redis_client.hdel(f"stack:{stack_id}:indexes", index_name)
 
     # Retrieve stack metadata
     stack_metadata = redis_client.hgetall(f"stack:{stack_id}:metadata")
@@ -1209,6 +1200,8 @@ async def delete_index_endpoint(
 
             # Remove from SHC deployer if enabled
             if stack_metadata.get("shc_cluster") == "True":
+                ansible_vars["shc_deployer_node"] = stack_details["shc_deployer_node"]
+                ansible_vars["shc_members"] = stack_details["shc_members"]
                 ansible_vars["file_path"] = (
                     "/opt/splunk/etc/shcluster/apps/001_splunk_aem/local/indexes.conf"
                 )
@@ -1249,12 +1242,11 @@ async def delete_index_endpoint(
                 creds={"username": splunk_username, "password": splunk_password},
             )
 
+        # Remove the index from Redis
+        removed_index_data = indexes.pop(index_name, None)
+        redis_client.hdel(f"stack:{stack_id}:indexes", index_name)
+
     except Exception as e:
-        # Rollback in case of an error
-        if removed_index_data:
-            redis_client.hset(
-                f"stack:{stack_id}:indexes", index_name, removed_index_data
-            )
         raise HTTPException(status_code=500, detail=f"Error running playbook: {str(e)}")
     finally:
         # Clean up temporary file
@@ -1262,12 +1254,8 @@ async def delete_index_endpoint(
             os.remove(temp_inventory_path)
 
     return {
-        "message": f"Index '{index_name}' deleted successfully."
-        + (
-            " Cluster bundle and/or SHC bundle were applied."
-            if apply_cluster_bundle or apply_shc_bundle
-            else " Bundle application skipped."
-        )
+        "message": f"Index '{index_name}' deleted successfully, for this change to take effect, ensure to apply push the bundles for distributed environments or restart Splunk for standalone.",
+        "index": index_name,
     }
 
 
