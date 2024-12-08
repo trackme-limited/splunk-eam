@@ -2029,11 +2029,14 @@ if __name__ == "__main__":
     # Ensure certificates are available
     cert_file, key_file = ensure_certificates()
 
+    # Retrieve the port from the environment variable or default to 8443
+    port = int(os.getenv("API_PORT", 8443))
+
     # Run the FastAPI app with HTTPS
     uvicorn.run(
         "main:app",
         host="0.0.0.0",
-        port=8443,
+        port=port,
         ssl_certfile=cert_file,
         ssl_keyfile=key_file,
     )

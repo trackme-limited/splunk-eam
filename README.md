@@ -75,9 +75,64 @@ Start the container and review the container logs, example of expected results:
     INFO:     Started server process [1]
     INFO:     Waiting for application startup.
     INFO:     Application startup complete.
-    INFO:     Uvicorn running on http://0.0.0.0:8443 (Press CTRL+C to quit)
+    INFO:     Uvicorn running on https://0.0.0.0:8443 (Press CTRL+C to quit)
 
 The container is ready to be used.
+
+### Port Configuration and SSL
+
+#### Port Configuration
+
+The API allows users to configure the port it listens on via environment variables when running the Docker container.
+
+- **Default Port:** `8443`
+- **Custom Port:** To override the default port, set the `API_PORT` environment variable during container startup.
+
+**Examples:**
+
+- Running the container with the default port:
+
+    docker run -p 8443:8443 your_image_name
+
+#### SSL Configuration
+
+The API uses HTTPS for secure communication. It can either automatically generate a self-signed SSL certificate or use a custom certificate provided by the user.
+
+- **Default Behavior:** A self-signed SSL certificate is automatically generated and used if no custom certificate is provided.
+
+- **Custom Certificates:** To use your own certificates, provide the following environment variables when running the container:
+
+  - `USE_EXTERNAL_CERT=true`
+  - `EXTERNAL_CERT_FILE=/path/to/your/certificate.pem`
+  - `EXTERNAL_KEY_FILE=/path/to/your/private.key`
+
+**Examples:**
+
+- Using the default self-signed certificate:
+
+    docker run -p 8443:8443 your_image_name
+
+- Using custom certificates:
+
+    docker run \
+    -e USE_EXTERNAL_CERT=true \
+    -e EXTERNAL_CERT_FILE=/app/certs/custom_cert.pem \
+    -e EXTERNAL_KEY_FILE=/app/certs/custom_key.pem \
+    -v /local/certs:/app/certs \
+    -p 8443:8443 your_image_name
+
+Here, /local/certs is a local directory containing the custom_cert.pem and custom_key.pem files, which are mounted to the container’s /app/certs directory.
+
+#### Environment Variable Summary
+
+You could add a quick summary table for all environment variables for easy reference:
+
+| Variable                | Description                                        | Default Value |
+|-------------------------|----------------------------------------------------|---------------|
+| `PORT`                  | Port on which the API listens.                    | `8443`        |
+| `USE_EXTERNAL_CERT`      | Enable to use custom SSL certificates.            | `false`       |
+| `EXTERNAL_CERT_FILE`     | Path to the custom SSL certificate file.          | Empty         |
+| `EXTERNAL_KEY_FILE`      | Path to the custom SSL key file.                  | Empty         |
 
 ### Update the default admin credentials
 
@@ -88,7 +143,7 @@ Before you can start using the API, you need to update the default admin credent
 
 Example: (change localhost to the server name or IP address where the container is running)
 
-    curl -X POST http://localhost:8443/update_password \
+    curl -k -X POST https://localhost:8443/update_password \
     -H "Content-Type: application/json" \
     -d '{
     "current_password": "password",
@@ -107,7 +162,7 @@ Before you can start using the API, you first need to create a bearer token.
 
 *Run:*
 
-    curl -X POST http://localhost:8443/create_token \
+    curl -k -X POST https://localhost:8443/create_token \
     -H "Content-Type: application/json" \
     -d '{
     "username": "admin",
@@ -131,7 +186,7 @@ You can test the API by trying to access to the stacks information, if successfu
 
 Run:
 
-    curl -X GET "http://localhost:8443/stacks" -H "Authorization: Bearer $token"
+    curl -k -X GET "https://localhost:8443/stacks" -H "Authorization: Bearer $token"
 
 Response:
 
@@ -158,7 +213,7 @@ The first step is to add a stack definition, there are two essential use cases:
 
 The following REST call defines a distributed stack:
 
-    curl -H "Authorization: Bearer $token" -X POST http://localhost:8443/stacks -H "Content-Type: application/json" -d '{
+    curl -k -H "Authorization: Bearer $token" -X POST https://localhost:8443/stacks -H "Content-Type: application/json" -d '{
         "stack_id": "prd1-cluster",
         "enterprise_deployment_type": "distributed",
         "shc_cluster": true,
@@ -184,7 +239,7 @@ Response example:
 
 *Alternatively, if this distributed environment does not have an SHC:*
 
-    curl -H "Authorization: Bearer $token" -X POST http://localhost:8443/stacks -H "Content-Type: application/json" -d '{
+    curl -k -H "Authorization: Bearer $token" -X POST https://localhost:8443/stacks -H "Content-Type: application/json" -d '{
         "stack_id": "prd1-cluster",
         "enterprise_deployment_type": "distributed",
         "shc_cluster": false,
@@ -195,13 +250,13 @@ Response example:
 
 Run:
 
-    curl -H "Authorization: Bearer $token" -X GET "http://localhost:8443/stacks/prd1-cluster"
+    curl -k -H "Authorization: Bearer $token" -X GET "https://localhost:8443/stacks/prd1-cluster"
 
 #### Standalone example
 
 The following REST call defines a standalone stack:
 
-    curl -H "Authorization: Bearer $token" -X POST http://localhost:8443/stacks -H "Content-Type: application/json" -d '{
+    curl -k -H "Authorization: Bearer $token" -X POST https://localhost:8443/stacks -H "Content-Type: application/json" -d '{
         "stack_id": "prd1-standalone",
         "enterprise_deployment_type": "standalone"
     }'
@@ -225,7 +280,7 @@ Response example:
 
 Run:
     
-    curl -H "Authorization: Bearer $token" -X GET "http://localhost:8443/stacks/prd1-standalone"
+    curl -k -H "Authorization: Bearer $token" -X GET "https://localhost:8443/stacks/prd1-standalone"
 
 ### Defining and pushing the Ansible inventory
 
@@ -267,13 +322,13 @@ The inventory.json file will be created in the utils directory.
 
 *Example for our distributed environment:*
 
-    curl -H "Authorization: Bearer $token" -X POST "http://localhost:8443/stacks/prd1-cluster/inventory" \
+    curl -k -H "Authorization: Bearer $token" -X POST "https://localhost:8443/stacks/prd1-cluster/inventory" \
     -H "Content-Type: application/json" \
     -d @inventory.json
 
 *Example for our standalone environment:*
 
-    curl -H "Authorization: Bearer $token" -X POST "http://localhost:8443/stacks/prd1-standalone/inventory" \
+    curl -k -H "Authorization: Bearer $token" -X POST "https://localhost:8443/stacks/prd1-standalone/inventory" \
     -H "Content-Type: application/json" \
     -d @inventory.json
 
@@ -291,7 +346,7 @@ Finally, push the SSH private key to the stack endpoint:
 
 *Example for our distributed environment
 
-    curl -H "Authorization: Bearer $token" -X POST "http://localhost:8443/stacks/prd1-cluster/ssh_key" \
+    curl -k -H "Authorization: Bearer $token" -X POST "https://localhost:8443/stacks/prd1-cluster/ssh_key" \
     -H "Content-Type: application/json" \
     --data-binary @private_key.json
 
@@ -301,7 +356,7 @@ You can test the Ansible connectivity to the stack by running the following comm
 
 *Example for our distributed environment*
 
-    curl -H "Authorization: Bearer $token" -X POST "http://localhost:8443/stacks/prd1-cluster/ansible_test"
+    curl -k -H "Authorization: Bearer $token" -X POST "https://localhost:8443/stacks/prd1-cluster/ansible_test"
 
 *Response:*
 
@@ -395,13 +450,13 @@ You can test the Ansible connectivity to the stack by running the following comm
 
 **The API is self-documented and you can access the Swagger UI by visiting the following URL:**
 
-    curl -X GET "http://localhost:8443/docs/endpoints" -H "Authorization: Bearer $token"
+    curl -k -X GET "https://localhost:8443/docs/endpoints" -H "Authorization: Bearer $token"
 
 #### POST /create_token
 
 Create a bearer token for authentication.
 
-    curl -X POST http://localhost:8443/create_token \
+    curl -k -X POST https://localhost:8443/create_token \
     -H "Content-Type: application/json" \
     -d '{
     "username": "admin",
@@ -412,7 +467,7 @@ Create a bearer token for authentication.
 
 Revoke an existing bearer token.
 
-    curl -X POST http://localhost:8443/delete_token \
+    curl -k -X POST https://localhost:8443/delete_token \
     -H "Content-Type: application/json" \
     -d '{
     "token": "your_token"
@@ -422,7 +477,7 @@ Revoke an existing bearer token.
 
 Update the admin password.
 
-    curl -X POST http://localhost:8443/update_password \
+    curl -k -X POST https://localhost:8443/update_password \
     -H "Content-Type: application/json" \
     -d '{
     "current_password": "current_password",
@@ -433,7 +488,7 @@ Update the admin password.
 
 Create a new stack.
 
-    curl -X POST http://localhost:8443/stacks \
+    curl -k -X POST https://localhost:8443/stacks \
     -H "Authorization: Bearer $token" \
     -H "Content-Type: application/json" \
     -d '{
@@ -446,28 +501,28 @@ Create a new stack.
 
 Retrieve all stacks.
 
-    curl -X GET http://localhost:8443/stacks \
+    curl -k -X GET https://localhost:8443/stacks \
     -H "Authorization: Bearer $token"
 
 #### GET /stacks/{stack_id}
 
 Retrieve details of a specific stack.
 
-    curl -X GET http://localhost:8443/stacks/stack_001 \
+    curl -k -X GET https://localhost:8443/stacks/stack_001 \
     -H "Authorization: Bearer $token"
 
 #### DELETE /stacks/{stack_id}
 
 Delete a specific stack.
 
-    curl -X DELETE http://localhost:8443/stacks/stack_001 \
+    curl -k -X DELETE https://localhost:8443/stacks/stack_001 \
     -H "Authorization: Bearer $token"
 
 #### POST /stacks/{stack_id}/inventory
 
 Upload the Ansible inventory for a stack.
 
-    curl -X POST http://localhost:8443/stacks/stack_001/inventory \
+    curl -k -X POST https://localhost:8443/stacks/stack_001/inventory \
     -H "Authorization: Bearer $token" \
     -H "Content-Type: application/json" \
     -d @inventory.json
@@ -476,14 +531,14 @@ Upload the Ansible inventory for a stack.
 
 Retrieve the Ansible inventory for a stack.
 
-    curl -X GET http://localhost:8443/stacks/stack_001/inventory \
+    curl -k -X GET https://localhost:8443/stacks/stack_001/inventory \
     -H "Authorization: Bearer $token"
 
 #### POST /stacks/{stack_id}/ssh_key
 
 Upload the SSH private key for a stack.
 
-    curl -X POST http://localhost:8443/stacks/stack_001/ssh_key \
+    curl -k -X POST https://localhost:8443/stacks/stack_001/ssh_key \
     -H "Authorization: Bearer $token" \
     -H "Content-Type: application/json" \
     -d '{
@@ -494,7 +549,7 @@ Upload the SSH private key for a stack.
 
 Add a new index to a stack.
 
-    curl -X POST http://localhost:8443/stacks/stack_001/indexes \
+    curl -k -X POST https://localhost:8443/stacks/stack_001/indexes \
     -H "Authorization: Bearer $token" \
     -H "Content-Type: application/json" \
     -d '{
@@ -509,14 +564,14 @@ Add a new index to a stack.
 
 Retrieve all indexes for a stack.
 
-    curl -X GET http://localhost:8443/stacks/stack_001/indexes \
+    curl -k -X GET https://localhost:8443/stacks/stack_001/indexes \
     -H "Authorization: Bearer $token"
 
 #### DELETE /stacks/{stack_id}/indexes/{index_name}
 
 Delete an index from a stack.
 
-    curl -X DELETE http://localhost:8443/stacks/stack_001/indexes/index_name \
+    curl -k -X DELETE https://localhost:8443/stacks/stack_001/indexes/index_name \
     -H "Authorization: Bearer $token" \
     -H "Content-Type: application/json" \
     -d '{
@@ -528,7 +583,7 @@ Delete an index from a stack.
 
 Install a Splunk app from Splunkbase on a stack.
 
-    curl -X POST http://localhost:8443/stacks/stack_001/install_splunk_app \
+    curl -k -X POST https://localhost:8443/stacks/stack_001/install_splunk_app \
     -H "Authorization: Bearer $token" \
     -H "Content-Type: application/json" \
     -d '{
@@ -545,7 +600,7 @@ Install a Splunk app from Splunkbase on a stack.
 
 Delete a Splunk app from a stack.
 
-    curl -X DELETE http://localhost:8443/stacks/stack_001/delete_splunk_app \
+    curl -k -X DELETE https://localhost:8443/stacks/stack_001/delete_splunk_app \
     -H "Authorization: Bearer $token" \
     -H "Content-Type: application/json" \
     -d '{
@@ -558,7 +613,7 @@ Delete a Splunk app from a stack.
 
 Install a private Splunk app on a stack.
 
-    curl -X POST http://localhost:8443/stacks/stack_001/install_private_app \
+    curl -k -X POST https://localhost:8443/stacks/stack_001/install_private_app \
     -H "Authorization: Bearer $token" \
     -H "Content-Type: application/json" \
     -d '{
@@ -572,7 +627,7 @@ Install a private Splunk app on a stack.
 
 Delete a private Splunk app from a stack.
 
-    curl -X DELETE http://localhost:8443/stacks/stack_001/delete_private_app \
+    curl -k -X DELETE https://localhost:8443/stacks/stack_001/delete_private_app \
     -H "Authorization: Bearer $token" \
     -H "Content-Type: application/json" \
     -d '{
@@ -585,7 +640,7 @@ Delete a private Splunk app from a stack.
 
 Restart Splunk services on a stack.
 
-    curl -X POST http://localhost:8443/stacks/stack_001/restart_splunk \
+    curl -k -X POST https://localhost:8443/stacks/stack_001/restart_splunk \
     -H "Authorization: Bearer $token" \
     -H "Content-Type: application/json" \
     -d '{
@@ -596,7 +651,7 @@ Restart Splunk services on a stack.
 
 Trigger a rolling restart of an indexer cluster.
 
-    curl -X POST http://localhost:8443/stacks/stack_001/cluster_rolling_restart \
+    curl -k -X POST https://localhost:8443/stacks/stack_001/cluster_rolling_restart \
     -H "Authorization: Bearer $token" \
     -H "Content-Type: application/json" \
     -d '{
@@ -608,7 +663,7 @@ Trigger a rolling restart of an indexer cluster.
 
 Trigger a rolling restart of a Search Head Cluster (SHC).
 
-    curl -X POST http://localhost:8443/stacks/stack_001/shc_rolling_restart \
+    curl -k -X POST https://localhost:8443/stacks/stack_001/shc_rolling_restart \
     -H "Authorization: Bearer $token" \
     -H "Content-Type: application/json" \
     -d '{
@@ -620,5 +675,5 @@ Trigger a rolling restart of a Search Head Cluster (SHC).
 
 Test the Ansible connection to the hosts in a stack.
 
-    curl -X POST http://localhost:8443/stacks/stack_001/ansible_test \
+    curl -k -X POST https://localhost:8443/stacks/stack_001/ansible_test \
     -H "Authorization: Bearer $token"
