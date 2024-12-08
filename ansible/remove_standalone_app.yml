@@ -15,7 +15,6 @@
         --answer-yes
         -auth '{{ splunk_username }}:{{ splunk_password }}'
       become_user: splunk
-      ignore_errors: yes
 
     - name: Ensure app directory is removed
       file:

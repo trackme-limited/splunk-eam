@@ -1452,10 +1452,9 @@ async def install_splunk_app(
         }
 
     except Exception as e:
-        logger.error(f"Error installing app '{splunkbase_app_name}': {str(e)}")
-        raise HTTPException(
-            status_code=500, detail=f"Unable to install app '{splunkbase_app_name}'."
-        )
+        error_message = f'Error installing app "{splunkbase_app_name}": {str(e)}'
+        logger.error(error_message)
+        raise HTTPException(status_code=500, detail=error_message)
 
 
 """
@@ -1553,10 +1552,11 @@ async def delete_splunk_app(
         }
 
     except Exception as e:
-        logger.error(f"Error deleting app '{splunkbase_app_name}': {str(e)}")
+        error_message = f'Error deleting app "{splunkbase_app_name}": {str(e)}'
+        logger.error(error_message)
         raise HTTPException(
             status_code=500,
-            detail=f"Unable to delete app '{splunkbase_app_name}'.",
+            detail=error_message,
         )
 
 
