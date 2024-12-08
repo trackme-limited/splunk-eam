@@ -2,7 +2,7 @@
 
 ## Overview
 
-The Splunk Enterprise API Manager (Splunk AEM) is a docker based API solution designed to manage Splunk Enterprise environments programmatically. 
+The Splunk Enterprise API Manager (Splunk AEM) is a docker based API solution designed to manage Splunk Enterprise environments programmatically.
 
 Splunk AEM provides a RESTful API to manage Splunk Enterprise environments:
 
