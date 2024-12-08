@@ -284,7 +284,7 @@ Response example:
 
 Run:
 
-```json
+```shell
     curl -k -H "Authorization: Bearer $token" -X GET "https://localhost:8443/stacks/prd1-cluster"
 ```
 
