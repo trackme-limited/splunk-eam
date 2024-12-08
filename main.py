@@ -1692,6 +1692,10 @@ async def restart_splunk(
     stack_id: str,
     limit: Optional[str] = Body(None, embed=True),  # Optional limit parameter
 ):
+
+    # Retrieve stack details from Redis
+    stack_details = load_stack_from_redis(stack_id)
+
     # Retrieve stack metadata from Redis
     stack_metadata = redis_client.hgetall(f"stack:{stack_id}:metadata")
     if not stack_metadata:
@@ -1728,6 +1732,12 @@ async def restart_splunk(
             status_code=500, detail=f"Failed to trigger Splunk restart: {str(e)}"
         )
 
-    return {
-        "message": f"Splunk Restart triggered successfully.",
-    }
+    if stack_details["enterprise_deployment_type"] == "standalone":
+        return {
+            "message": f"Splunk Restart triggered successfully.",
+        }
+
+    else:
+        return {
+            "message": f"Splunk Restart triggered successfully for hosts: {limit_hosts}",
+        }
