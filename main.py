@@ -202,11 +202,34 @@ redis_client = redis.StrictRedis(
 )
 
 # Set default admin password if not already set
+DEFAULT_ADMIN_PASSWORD = os.getenv("DEFAULT_ADMIN_PASSWORD", "password")
 if not redis_client.exists("admin_password"):
     redis_client.set("admin_password", os.getenv("DEFAULT_ADMIN_PASSWORD", "password"))
 
 # init API
 app = FastAPI()
+
+
+@app.middleware("http")
+async def enforce_password_update(request, call_next):
+    """
+    Middleware to enforce updating the default admin password before accessing endpoints.
+    """
+    current_password = redis_client.get("admin_password")
+    if (
+        current_password == DEFAULT_ADMIN_PASSWORD
+        and request.url.path != "/update_password"
+    ):
+        return JSONResponse(
+            status_code=403,
+            content={
+                "detail": "Access denied. Please update the default admin password using the '/update_password' endpoint."
+            },
+        )
+
+    # Proceed with the request if the password is updated or the path is `/update_password`
+    response = await call_next(request)
+    return response
 
 
 # Token verification middleware
