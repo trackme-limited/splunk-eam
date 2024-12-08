@@ -5,7 +5,7 @@ RUN addgroup --system deployer && adduser --system --ingroup deployer --home /ho
 
 # Install dependencies
 RUN apt-get update && apt-get install -y \
-    procps iputils-ping net-tools openssh-client redis-server \
+    procps iputils-ping net-tools openssh-client redis-server vim\
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
