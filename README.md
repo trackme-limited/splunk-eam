@@ -32,6 +32,18 @@ Splunk AEM provides a RESTful API to manage Splunk Enterprise environments:
 - An SSH private key to access the Splunk Enterprise environments, the user should be able to run sudo commands with no password.
 - An Ansible inventory file with the Splunk Enterprise environments to manage. (example provided in this documentation)
 
+### Pull the Docker image
+
+**You can find the release of Splunk EAM in DockerHub:**
+
+- [https://hub.docker.com/repository/docker/trackmelimited/splunk-eam/general](https://hub.docker.com/repository/docker/trackmelimited/splunk-eam/general)
+
+**Pull the latest release in Docker in one command:**
+
+```shell
+    docker push trackmelimited/splunk-eam:latest
+```
+
 ### Installation
 
 - The container listens to 8443 port by default.
@@ -147,6 +159,10 @@ You could add a quick summary table for all environment variables for easy refer
 | `USE_EXTERNAL_CERT`      | Enable to use custom SSL certificates.            | `false`       |
 | `EXTERNAL_CERT_FILE`     | Path to the custom SSL certificate file.          | Empty         |
 | `EXTERNAL_KEY_FILE`      | Path to the custom SSL key file.                  | Empty         |
+
+### Upgrading
+
+To upgrade Splunk EAM, you only need to ensure that you have pulled or refreshed your local Docker registry, then restart your container.
 
 ### Update the default admin credentials
 
