@@ -497,14 +497,20 @@ def run_ansible_playbook(
             ["-e", f"ansible_python_interpreter={ansible_python_interpreter}"]
         )
 
-        # Sanitize the command for logging
+        # Sanitize sensitive data in the command for logging
         sanitized_command = command[:]
-        if "splunk_password" in json.dumps(ansible_vars):
-            sanitized_ansible_vars = ansible_vars.copy()
-            sanitized_ansible_vars["splunk_password"] = "*****"
-            sanitized_command[sanitized_command.index("-e") + 1] = json.dumps(
-                sanitized_ansible_vars
-            )
+        sanitized_vars = ansible_vars.copy() if ansible_vars else {}
+        if "splunk_password" in sanitized_vars:
+            sanitized_vars["splunk_password"] = "*****"
+        sanitized_command[sanitized_command.index("-e") + 1] = json.dumps(
+            sanitized_vars
+        )
+
+        # Ensure the logged command also masks sensitive information in SSH key paths
+        sanitized_command = [
+            re.sub(r"--private-key\s+[^ ]+", "--private-key *****", part)
+            for part in sanitized_command
+        ]
 
         logger.debug(f"Running Ansible playbook: {sanitized_command}")
 
