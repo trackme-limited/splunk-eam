@@ -21,6 +21,8 @@ Splunk AEM provides a RESTful API to manage Splunk Enterprise environments:
 - Trigger Splunk restarts programmatically, on distributed or standalone environments.
 - Trigger Splunk Indexer Cluster rolling restarts programmatically.
 - Trigger Splunk Search Head Cluster rolling restarts programmatically.
+- Highly flexible, listening port, SSL configuration can easily be modified up to your requirements.
+- Secured by default, the API is SSL based as a default, and requires default credentials to be updated before endpoints can be used.
 
 ## Requirements and Installation
 
@@ -148,7 +150,7 @@ You could add a quick summary table for all environment variables for easy refer
 
 ### Update the default admin credentials
 
-Before you can start using the API, you need to update the default admin credentials. The default credentials are:
+**Before** you can start using the API, you need to update the default admin credentials. The default credentials are:
 
 - login: admin
 - password: password
