@@ -40,7 +40,9 @@ Splunk AEM provides a RESTful API to manage Splunk Enterprise environments:
 
 - Create a docker volume called ``splunk-aem-data`` to store the data of the Splunk AEM API.
 
+```shell
     docker volume create splunk-aem-data
+```
 
 *Splunk AEM config volume:*
 
@@ -48,10 +50,13 @@ Splunk AEM provides a RESTful API to manage Splunk Enterprise environments:
 
 Start the container, example:
 
+```shell
     docker run -d --name splunk-aem -p 8443:8443 -v splunk-aem-data:/app/data -v splunk-aem-config:/app/config splunk-aem:latest
+```
 
 Start the container and review the container logs, example of expected results:
 
+```shell
     Starting Redis server and logging to /app/logs/redis.log...
     Waiting for Redis to be ready...
     7:C 08 Dec 2024 14:22:52.369 # oO0OoO0OoO0Oo Redis is starting oO0OoO0OoO0Oo
@@ -76,6 +81,7 @@ Start the container and review the container logs, example of expected results:
     INFO:     Waiting for application startup.
     INFO:     Application startup complete.
     INFO:     Uvicorn running on https://0.0.0.0:8443 (Press CTRL+C to quit)
+```
 
 The container is ready to be used.
 
@@ -92,7 +98,9 @@ The API allows users to configure the port it listens on via environment variabl
 
 - Running the container with the default port:
 
+```shell
     docker run -p 8443:8443 your_image_name
+```
 
 #### SSL Configuration
 
@@ -110,16 +118,20 @@ The API uses HTTPS for secure communication. It can either automatically generat
 
 - Using the default self-signed certificate:
 
+```shell
     docker run -p 8443:8443 your_image_name
+```
 
 - Using custom certificates:
 
+```shell
     docker run \
     -e USE_EXTERNAL_CERT=true \
     -e EXTERNAL_CERT_FILE=/app/certs/custom_cert.pem \
     -e EXTERNAL_KEY_FILE=/app/certs/custom_key.pem \
     -v /local/certs:/app/certs \
     -p 8443:8443 your_image_name
+```
 
 Here, /local/certs is a local directory containing the custom_cert.pem and custom_key.pem files, which are mounted to the container’s /app/certs directory.
 
@@ -143,18 +155,22 @@ Before you can start using the API, you need to update the default admin credent
 
 Example: (change localhost to the server name or IP address where the container is running)
 
+```shell
     curl -k -X POST https://localhost:8443/update_password \
     -H "Content-Type: application/json" \
     -d '{
     "current_password": "password",
     "new_password": "ch@ngeMe"
     }'
+```
 
 Response:
 
+```json
     {
         "message": "Admin password updated successfully"
     }
+```
 
 ### Create a bearer token
 
@@ -162,23 +178,29 @@ Before you can start using the API, you first need to create a bearer token.
 
 *Run:*
 
+```shell
     curl -k -X POST https://localhost:8443/create_token \
     -H "Content-Type: application/json" \
     -d '{
     "username": "admin",
     "password": "ch@ngeMe"
     }'
+```
 
 Response:
 
-{
-  "access_token": "xxxxxxxxxxxxxxxxxxxx",
-  "token_type": "bearer"
-}
+```json
+    {
+    "access_token": "xxxxxxxxxxxxxxxxxxxx",
+    "token_type": "bearer"
+    }
+```
 
 For the purpose of the documentation, we will save and export this token in a shell variable:
 
+```shell
     export token='xxxxxxxxxxxxxxxxxxxx'
+```
 
 ### Test accessing the API
 
@@ -186,19 +208,25 @@ You can test the API by trying to access to the stacks information, if successfu
 
 Run:
 
+```shell
     curl -k -X GET "https://localhost:8443/stacks" -H "Authorization: Bearer $token"
+```
 
 Response:
 
+```json
     {
     "stacks": {}
     }
+```
 
 Any authentication issue would result in:
 
+```json
     {
     "detail": "Invalid or revoked token. Please authenticate again."
     }
+```
 
 ### Configuration and stacks definition
 
@@ -213,6 +241,7 @@ The first step is to add a stack definition, there are two essential use cases:
 
 The following REST call defines a distributed stack:
 
+```shell
     curl -k -H "Authorization: Bearer $token" -X POST https://localhost:8443/stacks -H "Content-Type: application/json" -d '{
         "stack_id": "prd1-cluster",
         "enterprise_deployment_type": "distributed",
@@ -221,9 +250,11 @@ The following REST call defines a distributed stack:
         "shc_deployer_node": "prd1-cl-ds-ds1",
         "shc_members": "prd1-cl-shc-sh1,prd1-cl-shc-sh2,prd1-cl-shc-sh3"
     }'
+```
 
 Response example:
 
+```json
     {
     "message": "Stack 'prd1-cluster' created successfully.",
         "stack": {
@@ -236,33 +267,41 @@ Response example:
             "ansible_python_interpreter": "/usr/bin/python3"
         }
     }
+```
 
 *Alternatively, if this distributed environment does not have an SHC:*
 
+```shell
     curl -k -H "Authorization: Bearer $token" -X POST https://localhost:8443/stacks -H "Content-Type: application/json" -d '{
         "stack_id": "prd1-cluster",
         "enterprise_deployment_type": "distributed",
         "shc_cluster": false,
         "cluster_manager_node": "prd1-cl-cm-cm1",
     }'
+```
 
 *Accessing the stack definition*:
 
 Run:
 
+```json
     curl -k -H "Authorization: Bearer $token" -X GET "https://localhost:8443/stacks/prd1-cluster"
+```
 
 #### Standalone example
 
 The following REST call defines a standalone stack:
 
+```shell
     curl -k -H "Authorization: Bearer $token" -X POST https://localhost:8443/stacks -H "Content-Type: application/json" -d '{
         "stack_id": "prd1-standalone",
         "enterprise_deployment_type": "standalone"
     }'
+```
 
 Response example:
 
+```json
     {
         "message": "Stack 'prd1-standalone' created successfully.",
         "stack": {
@@ -275,17 +314,21 @@ Response example:
             "ansible_python_interpreter": "/usr/bin/python3"
         }
     }
+```
 
 *Accessing the stack definition*:
 
 Run:
-    
+
+```shell
     curl -k -H "Authorization: Bearer $token" -X GET "https://localhost:8443/stacks/prd1-standalone"
+```
 
 ### Defining and pushing the Ansible inventory
 
 The following shows the inventory example for the distributed environment:
 
+```shell
     [all]
     prd1-cl-cm-cm1 ansible_host=192.168.1.xx ansible_user=deployer
     prd1-cl-mc-mc1 ansible_host=192.168.1.xx ansible_user=deployer
@@ -300,11 +343,14 @@ The following shows the inventory example for the distributed environment:
     prd1-cl-idx-dc2-idx2 ansible_host=192.168.1.xx ansible_user=deployer
     prd1-cl-hf-dc1-hf1 ansible_host=192.168.1.xx ansible_user=deployer
     prd1-cl-hf-dc1-hf2 ansible_host=192.168.1.xx ansible_user=deployer
+```
 
 The following shows the inventory example for the standalone environment:
 
+```shell
     [all]
     prd1-standalone ansible_host=192.168.1.xx ansible_user=deployer
+```
 
 Before pushing the inventory to the API (which stores it in Redis), you need to convent it into a JSON format.
 
@@ -322,33 +368,43 @@ The inventory.json file will be created in the utils directory.
 
 *Example for our distributed environment:*
 
+```shell
     curl -k -H "Authorization: Bearer $token" -X POST "https://localhost:8443/stacks/prd1-cluster/inventory" \
     -H "Content-Type: application/json" \
     -d @inventory.json
+```
 
 *Example for our standalone environment:*
 
+```shell
     curl -k -H "Authorization: Bearer $token" -X POST "https://localhost:8443/stacks/prd1-standalone/inventory" \
     -H "Content-Type: application/json" \
     -d @inventory.json
+```
 
 ### Pushing the SSH private key
 
 First, you need to convert your SSH private key to base64 format:
 
+```shell
     cat ~/.ssh/id_rsa | base64 -w 0 > private_key_base64.txt
+```
 
 Then, take the content of the private_key_base64.txt file, add it to a JSON file as: (called here private_key.json)
 
+```json
     {"ssh_key_b64": "xxxxxxx"}
+```
 
 Finally, push the SSH private key to the stack endpoint:
 
 *Example for our distributed environment
 
+```shell
     curl -k -H "Authorization: Bearer $token" -X POST "https://localhost:8443/stacks/prd1-cluster/ssh_key" \
     -H "Content-Type: application/json" \
     --data-binary @private_key.json
+```
 
 ### Test Ansible connectivity
 
@@ -356,10 +412,13 @@ You can test the Ansible connectivity to the stack by running the following comm
 
 *Example for our distributed environment*
 
+```shell
     curl -k -H "Authorization: Bearer $token" -X POST "https://localhost:8443/stacks/prd1-cluster/ansible_test"
+```
 
 *Response:*
 
+```json
     {
         "message": "Ansible ping test successful",
         "results": [
@@ -443,6 +502,7 @@ You can test the Ansible connectivity to the stack by running the following comm
             }
         ]
     }
+```
 
 ### Using the API
 
@@ -450,44 +510,53 @@ You can test the Ansible connectivity to the stack by running the following comm
 
 **The API is self-documented and you can access the Swagger UI by visiting the following URL:**
 
+```shell
     curl -k -X GET "https://localhost:8443/docs/endpoints" -H "Authorization: Bearer $token"
+```
 
 #### POST /create_token
 
 Create a bearer token for authentication.
 
+```shell
     curl -k -X POST https://localhost:8443/create_token \
     -H "Content-Type: application/json" \
     -d '{
     "username": "admin",
     "password": "your_password"
     }'
+```
 
 #### POST /delete_token
 
 Revoke an existing bearer token.
 
+```shell
     curl -k -X POST https://localhost:8443/delete_token \
     -H "Content-Type: application/json" \
     -d '{
     "token": "your_token"
     }'
+```
 
 #### POST /update_password
 
 Update the admin password.
 
+```shell
     curl -k -X POST https://localhost:8443/update_password \
     -H "Content-Type: application/json" \
     -d '{
     "current_password": "current_password",
     "new_password": "new_password"
     }'
+```
 
 #### POST /stacks
 
 Create a new stack.
 
+```shell
     curl -k -X POST https://localhost:8443/stacks \
     -H "Authorization: Bearer $token" \
     -H "Content-Type: application/json" \
@@ -496,59 +565,73 @@ Create a new stack.
     "enterprise_deployment_type": "standalone",
     "shc_cluster": false
     }'
+```
 
 #### GET /stacks
 
 Retrieve all stacks.
 
+```shell
     curl -k -X GET https://localhost:8443/stacks \
     -H "Authorization: Bearer $token"
+```
 
 #### GET /stacks/{stack_id}
 
 Retrieve details of a specific stack.
 
+```shell
     curl -k -X GET https://localhost:8443/stacks/stack_001 \
     -H "Authorization: Bearer $token"
+```
 
 #### DELETE /stacks/{stack_id}
 
 Delete a specific stack.
 
+```shell
     curl -k -X DELETE https://localhost:8443/stacks/stack_001 \
     -H "Authorization: Bearer $token"
+```
 
 #### POST /stacks/{stack_id}/inventory
 
 Upload the Ansible inventory for a stack.
 
+```shell
     curl -k -X POST https://localhost:8443/stacks/stack_001/inventory \
     -H "Authorization: Bearer $token" \
     -H "Content-Type: application/json" \
     -d @inventory.json
+```
 
 #### GET /stacks/{stack_id}/inventory
 
 Retrieve the Ansible inventory for a stack.
 
+```shell
     curl -k -X GET https://localhost:8443/stacks/stack_001/inventory \
     -H "Authorization: Bearer $token"
+```
 
 #### POST /stacks/{stack_id}/ssh_key
 
 Upload the SSH private key for a stack.
 
+```shell
     curl -k -X POST https://localhost:8443/stacks/stack_001/ssh_key \
     -H "Authorization: Bearer $token" \
     -H "Content-Type: application/json" \
     -d '{
     "ssh_key_b64": "base64_encoded_ssh_key"
     }'
+```
 
 #### POST /stacks/{stack_id}/indexes
 
 Add a new index to a stack.
 
+```shell
     curl -k -X POST https://localhost:8443/stacks/stack_001/indexes \
     -H "Authorization: Bearer $token" \
     -H "Content-Type: application/json" \
@@ -559,18 +642,22 @@ Add a new index to a stack.
     "maxDataSizeMB": 500000,
     "datatype": "event"
     }'
+```
 
 #### GET /stacks/{stack_id}/indexes
 
 Retrieve all indexes for a stack.
 
+```shell
     curl -k -X GET https://localhost:8443/stacks/stack_001/indexes \
     -H "Authorization: Bearer $token"
+```
 
 #### DELETE /stacks/{stack_id}/indexes/{index_name}
 
 Delete an index from a stack.
 
+```shell
     curl -k -X DELETE https://localhost:8443/stacks/stack_001/indexes/index_name \
     -H "Authorization: Bearer $token" \
     -H "Content-Type: application/json" \
@@ -578,11 +665,13 @@ Delete an index from a stack.
     "splunk_username": "admin",
     "splunk_password": "password"
     }'
+```
 
 #### POST /stacks/{stack_id}/install_splunk_app
 
 Install a Splunk app from Splunkbase on a stack.
 
+```shell
     curl -k -X POST https://localhost:8443/stacks/stack_001/install_splunk_app \
     -H "Authorization: Bearer $token" \
     -H "Content-Type: application/json" \
@@ -595,11 +684,13 @@ Install a Splunk app from Splunkbase on a stack.
     "splunkbase_app_name": "app_name",
     "version": "app_version"
     }'
+```
 
 #### DELETE /stacks/{stack_id}/delete_splunk_app
 
 Delete a Splunk app from a stack.
 
+```shell
     curl -k -X DELETE https://localhost:8443/stacks/stack_001/delete_splunk_app \
     -H "Authorization: Bearer $token" \
     -H "Content-Type: application/json" \
@@ -608,11 +699,13 @@ Delete a Splunk app from a stack.
     "splunk_username": "admin",
     "splunk_password": "password"
     }'
+```
 
 #### POST /stacks/{stack_id}/install_private_app
 
 Install a private Splunk app on a stack.
 
+```shell
     curl -k -X POST https://localhost:8443/stacks/stack_001/install_private_app \
     -H "Authorization: Bearer $token" \
     -H "Content-Type: application/json" \
@@ -622,11 +715,13 @@ Install a private Splunk app on a stack.
     "splunk_username": "admin",
     "splunk_password": "password"
     }'
+```
 
 #### DELETE /stacks/{stack_id}/delete_private_app
 
 Delete a private Splunk app from a stack.
 
+```shell
     curl -k -X DELETE https://localhost:8443/stacks/stack_001/delete_private_app \
     -H "Authorization: Bearer $token" \
     -H "Content-Type: application/json" \
@@ -635,22 +730,26 @@ Delete a private Splunk app from a stack.
     "splunk_username": "admin",
     "splunk_password": "password"
     }'
+```
 
 #### POST /stacks/{stack_id}/restart_splunk
 
 Restart Splunk services on a stack.
 
+```shell
     curl -k -X POST https://localhost:8443/stacks/stack_001/restart_splunk \
     -H "Authorization: Bearer $token" \
     -H "Content-Type: application/json" \
     -d '{
     "limit": "optional_limit_parameter"
     }'
+```
 
 #### POST /stacks/{stack_id}/cluster_rolling_restart
 
 Trigger a rolling restart of an indexer cluster.
 
+```shell
     curl -k -X POST https://localhost:8443/stacks/stack_001/cluster_rolling_restart \
     -H "Authorization: Bearer $token" \
     -H "Content-Type: application/json" \
@@ -658,11 +757,13 @@ Trigger a rolling restart of an indexer cluster.
     "splunk_username": "admin",
     "splunk_password": "password"
     }'
+```
 
 #### POST /stacks/{stack_id}/shc_rolling_restart
 
 Trigger a rolling restart of a Search Head Cluster (SHC).
 
+```shell
     curl -k -X POST https://localhost:8443/stacks/stack_001/shc_rolling_restart \
     -H "Authorization: Bearer $token" \
     -H "Content-Type: application/json" \
@@ -670,10 +771,13 @@ Trigger a rolling restart of a Search Head Cluster (SHC).
     "splunk_username": "admin",
     "splunk_password": "password"
     }'
+```
 
 #### POST /stacks/{stack_id}/ansible_test
 
 Test the Ansible connection to the hosts in a stack.
 
+```shell
     curl -k -X POST https://localhost:8443/stacks/stack_001/ansible_test \
     -H "Authorization: Bearer $token"
+```
