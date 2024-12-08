@@ -331,7 +331,7 @@ def save_main_file(data):
 
 # Paths
 AUTH_DIR = "/app/data/auth"
-SECRET_KEY_FILE = os.path.join(AUTH_DIR, "secret_key.txt")
+SECRET_KEY_FILE = os.path.join(AUTH_DIR, "splunk-eam.secret")
 
 # Ensure data directory exists
 os.makedirs(AUTH_DIR, exist_ok=True)
