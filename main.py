@@ -1286,30 +1286,39 @@ HTTP Method: GET
 
 
 # GET /stacks/{stack_id}/installed_apps
-@app.get("/stacks/{stack_id}/installed_apps")
-async def install_splunk_app(
-    stack_id: str,
-):
-    stack_details = load_stack_from_redis(stack_id)
-    stack_dir = ensure_stack_dir(stack_id)
-    stack_dir, inventory_path, ssh_key_path = get_stack_paths(stack_id)
-    files_dir = os.path.join(stack_dir, "files")
-    os.makedirs(files_dir, exist_ok=True)
+@app.get("/stacks/{stack_id}/installed_apps", summary="Retrieve installed Splunk apps")
+async def get_installed_apps(stack_id: str):
+    """
+    Retrieve the list of installed Splunk apps for a given stack using Redis.
+    """
+    try:
+        # Ensure the stack exists
+        stack_details = load_stack_from_redis(stack_id)
 
-    # Load the apps file to check for existing installations
-    apps_file_path = os.path.join(stack_dir, "stack_apps.json")
-    if not os.path.exists(apps_file_path):
-        with open(apps_file_path, "w") as f:
-            json.dump({}, f)
+        # Retrieve installed apps from Redis
+        installed_apps = redis_client.hgetall(f"stack:{stack_id}:apps")
 
-    with open(apps_file_path, "r") as f:
-        installed_apps = json.load(f)
+        # Deserialize app details from JSON
+        installed_apps = {
+            app_name: json.loads(app_details)
+            for app_name, app_details in installed_apps.items()
+        }
 
-    logging.debug(
-        f"Installed apps on stack {stack_id}: {json.dumps(installed_apps, indent=4)}"
-    )
+        # Log installed apps
+        logger.debug(
+            f"Installed apps on stack {stack_id}: {json.dumps(installed_apps, indent=4)}"
+        )
 
-    return installed_apps
+        return {"stack_id": stack_id, "installed_apps": installed_apps}
+
+    except Exception as e:
+        logger.error(
+            f"Error retrieving installed apps for stack '{stack_id}': {str(e)}"
+        )
+        raise HTTPException(
+            status_code=500,
+            detail=f"Unable to retrieve installed apps for stack '{stack_id}'.",
+        )
 
 
 """
@@ -1320,7 +1329,7 @@ HTTP Method: POST
 
 
 # POST /stacks/{stack_id}/install_splunk_app
-@app.post("/stacks/{stack_id}/install_splunk_app")
+@app.post("/stacks/{stack_id}/install_splunk_app", summary="Install a Splunk app")
 async def install_splunk_app(
     stack_id: str,
     splunk_username: str = Body(..., embed=True),
@@ -1330,124 +1339,122 @@ async def install_splunk_app(
     splunkbase_app_id: str = Body(..., embed=True),
     splunkbase_app_name: str = Body(..., embed=True),
     version: str = Body(..., embed=True),
-    apply_shc_bundle: bool = Body(
-        True, embed=True
-    ),  # Optional parameter with default value
+    apply_shc_bundle: bool = Body(True, embed=True),  # Optional parameter
 ):
-    stack_details = load_stack_from_redis(stack_id)
-    stack_dir = ensure_stack_dir(stack_id)
-    stack_dir, inventory_path, ssh_key_path = get_stack_paths(stack_id)
-    files_dir = os.path.join("/app/data", "splunk_apps")
-    os.makedirs(files_dir, exist_ok=True)
+    try:
+        # Retrieve stack details
+        stack_details = load_stack_from_redis(stack_id)
 
-    # Load the apps file to check for existing installations
-    apps_file_path = os.path.join(stack_dir, "stack_apps.json")
-    if not os.path.exists(apps_file_path):
-        with open(apps_file_path, "w") as f:
-            json.dump({}, f)
-
-    with open(apps_file_path, "r") as f:
-        installed_apps = json.load(f)
-
-    logging.debug(
-        f"Installed apps on stack {stack_id}: {json.dumps(installed_apps, indent=4)}"
-    )
-
-    # Check if the app is already installed with the requested version
-    if (
-        splunkbase_app_name in installed_apps
-        and installed_apps[splunkbase_app_name]["version"] == version
-    ):
-        return {
-            "message": f"App '{splunkbase_app_name}' is already installed with version {version}.",
-            "app_details": installed_apps[splunkbase_app_name],
+        # Retrieve existing apps from Redis
+        installed_apps = redis_client.hgetall(f"stack:{stack_id}:apps")
+        installed_apps = {
+            app_name: json.loads(app_details)
+            for app_name, app_details in installed_apps.items()
         }
 
-    else:
-        logging.debug(
-            f"App {splunkbase_app_name} is not installed with version {version}, downloading and installing will be requested."
+        # Check if the app is already installed with the requested version
+        if (
+            splunkbase_app_name in installed_apps
+            and installed_apps[splunkbase_app_name]["version"] == version
+        ):
+            return {
+                "message": f"App '{splunkbase_app_name}' is already installed with version {version}.",
+                "app_details": installed_apps[splunkbase_app_name],
+            }
+
+        logger.debug(
+            f"App '{splunkbase_app_name}' is not installed with version {version}. Downloading and installing."
         )
 
-    # Path to the downloaded tarball
-    app_tar_path = os.path.join(files_dir, f"{splunkbase_app_name}_{version}.tgz")
+        # Path to the downloaded tarball
+        files_dir = "/app/data/splunk_apps"
+        os.makedirs(files_dir, exist_ok=True)
+        app_tar_path = os.path.join(files_dir, f"{splunkbase_app_name}_{version}.tgz")
 
-    # Log in to Splunk Base
-    session_id = login_splunkbase(
-        splunkbase_username, splunkbase_password, proxy_dict={}
-    )
-
-    # Download app tarball unless it is already downloaded
-    if not os.path.exists(app_tar_path):
-        app_download_url = f"https://splunkbase.splunk.com/app/{splunkbase_app_id}/release/{version}/download/"
-        response = requests.get(
-            app_download_url,
-            headers={"X-Auth-Token": session_id},
-            stream=True,
-            allow_redirects=True,
+        # Log in to Splunk Base
+        session_id = login_splunkbase(
+            splunkbase_username, splunkbase_password, proxy_dict={}
         )
 
-        if response.status_code != 200:
-            raise HTTPException(
-                status_code=500,
-                detail=f"Failed to download app from Splunk Base: {response.text}",
+        # Download app tarball if not already downloaded
+        if not os.path.exists(app_tar_path):
+            app_download_url = f"https://splunkbase.splunk.com/app/{splunkbase_app_id}/release/{version}/download/"
+            response = requests.get(
+                app_download_url,
+                headers={"X-Auth-Token": session_id},
+                stream=True,
+                allow_redirects=True,
             )
 
-        with open(app_tar_path, "wb") as f:
-            f.write(response.content)
-        logger.info(f"App downloaded successfully: {app_tar_path}")
+            if response.status_code != 200:
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"Failed to download app from Splunk Base: {response.text}",
+                )
 
-    # Ensure Ansible's files directory exists
-    ansible_files_dir = "/app/ansible/files"
-    os.makedirs(ansible_files_dir, exist_ok=True)
+            with open(app_tar_path, "wb") as f:
+                f.write(response.content)
+            logger.info(f"App downloaded successfully: {app_tar_path}")
 
-    # Copy tarball to Ansible's files directory
-    ansible_tar_path = os.path.join(ansible_files_dir, f"{splunkbase_app_name}.tgz")
-    shutil.copy(app_tar_path, ansible_tar_path)
+        # Ensure Ansible's files directory exists and copy tarball
+        ansible_files_dir = "/app/ansible/files"
+        os.makedirs(ansible_files_dir, exist_ok=True)
+        ansible_tar_path = os.path.join(ansible_files_dir, f"{splunkbase_app_name}.tgz")
+        shutil.copy(app_tar_path, ansible_tar_path)
 
-    # Run Ansible playbook
-    playbook = (
-        "install_standalone_app.yml"
-        if stack_details["enterprise_deployment_type"] == "standalone"
-        else "install_shc_app.yml"
-    )
-    ansible_vars = {
-        "splunk_app_name": splunkbase_app_name,
-    }
+        # Determine the appropriate Ansible playbook
+        playbook = (
+            "install_standalone_app.yml"
+            if stack_details["enterprise_deployment_type"] == "standalone"
+            else "install_shc_app.yml"
+        )
 
-    if stack_details["enterprise_deployment_type"] != "standalone":
-        ansible_vars.update({"shc_deployer_node": stack_details["shc_deployer_node"]})
+        # Prepare Ansible variables
+        ansible_vars = {"splunk_app_name": splunkbase_app_name}
+        if stack_details["enterprise_deployment_type"] != "standalone":
+            ansible_vars.update(
+                {"shc_deployer_node": stack_details["shc_deployer_node"]}
+            )
 
-    run_ansible_playbook(
-        stack_id,
-        playbook,
-        inventory_path,
-        ansible_vars=ansible_vars,
-        creds={"username": splunk_username, "password": splunk_password},
-    )
-
-    # Update the apps file
-    installed_apps[splunkbase_app_name] = {"id": splunkbase_app_id, "version": version}
-    with open(apps_file_path, "w") as f:
-        json.dump(installed_apps, f, indent=4)
-
-    # Apply SHC bundle if needed and requested
-    if stack_details["shc_cluster"] and apply_shc_bundle:
-        ansible_vars = {}
-        ansible_vars["shc_deployer_node"] = stack_details["shc_deployer_node"]
-        ansible_vars["shc_members"] = stack_details["shc_members"]
+        # Run the Ansible playbook
         run_ansible_playbook(
             stack_id,
-            "apply_shc_bundle.yml",
-            inventory_path,
+            playbook,
             ansible_vars=ansible_vars,
-            limit=stack_details["shc_deployer_node"],
             creds={"username": splunk_username, "password": splunk_password},
         )
 
-    return {
-        "message": "App installed successfully",
-        "app_details": installed_apps[splunkbase_app_name],
-    }
+        # Update Redis with the new app details
+        redis_client.hset(
+            f"stack:{stack_id}:apps",
+            splunkbase_app_name,
+            json.dumps({"id": splunkbase_app_id, "version": version}),
+        )
+
+        # Apply SHC bundle if needed and requested
+        if stack_details.get("shc_cluster") and apply_shc_bundle:
+            ansible_vars = {
+                "shc_deployer_node": stack_details["shc_deployer_node"],
+                "shc_members": stack_details["shc_members"],
+            }
+            run_ansible_playbook(
+                stack_id,
+                "apply_shc_bundle.yml",
+                ansible_vars=ansible_vars,
+                limit=stack_details["shc_deployer_node"],
+                creds={"username": splunk_username, "password": splunk_password},
+            )
+
+        return {
+            "message": "App installed successfully",
+            "app_details": {"id": splunkbase_app_id, "version": version},
+        }
+
+    except Exception as e:
+        logger.error(f"Error installing app '{splunkbase_app_name}': {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Unable to install app '{splunkbase_app_name}'."
+        )
 
 
 """
@@ -1458,77 +1465,97 @@ HTTP Method: DELETE
 
 
 # DELETE /stacks/{stack_id}/delete_splunk_app
-@app.delete("/stacks/{stack_id}/delete_splunk_app")
+@app.delete("/stacks/{stack_id}/delete_splunk_app", summary="Delete a Splunk app")
 async def delete_splunk_app(
     stack_id: str,
-    splunkbase_app_name: str = Body(..., embed=True),
-    splunk_username: str = Body(..., embed=True),
-    splunk_password: str = Body(..., embed=True),
-    apply_shc_bundle: bool = Body(
-        True, embed=True
-    ),  # Optional parameter with default value
+    splunkbase_app_name: str = Query(
+        ..., description="Name of the Splunk app to delete"
+    ),
+    splunk_username: str = Query(..., description="Splunk admin username"),
+    splunk_password: str = Query(..., description="Splunk admin password"),
+    apply_shc_bundle: bool = Query(
+        True, description="Whether to apply the SHC bundle after deletion"
+    ),  # Optional parameter
 ):
-    stack_details = load_stack_from_redis(stack_id)
-    stack_dir = ensure_stack_dir(stack_id)
-    apps_file_path = os.path.join(stack_dir, "stack_apps.json")
-    stack_dir, inventory_path, ssh_key_path = get_stack_paths(stack_id)
+    try:
+        # Retrieve stack details
+        stack_details = load_stack_from_redis(stack_id)
 
-    # Load the apps file
-    if not os.path.exists(apps_file_path):
-        raise HTTPException(
-            status_code=404, detail="No apps file found for this stack."
+        # Retrieve existing apps from Redis
+        installed_apps = redis_client.hgetall(f"stack:{stack_id}:apps")
+        installed_apps = {
+            app_name: json.loads(app_details)
+            for app_name, app_details in installed_apps.items()
+        }
+
+        # Check if the app exists
+        if splunkbase_app_name not in installed_apps:
+            raise HTTPException(
+                status_code=404,
+                detail=f"App '{splunkbase_app_name}' not found in this stack's installed apps.",
+            )
+
+        logger.debug(f"Deleting app '{splunkbase_app_name}' from stack '{stack_id}'.")
+
+        # Determine the appropriate Ansible playbook
+        playbook = (
+            "remove_standalone_app.yml"
+            if stack_details["enterprise_deployment_type"] == "standalone"
+            else "remove_shc_app.yml"
         )
 
-    with open(apps_file_path, "r") as f:
-        installed_apps = json.load(f)
+        # Prepare Ansible variables
+        ansible_vars = {"splunk_app_name": splunkbase_app_name}
+        if stack_details["enterprise_deployment_type"] != "standalone":
+            ansible_vars.update(
+                {"shc_deployer_node": stack_details["shc_deployer_node"]}
+            )
 
-    # Check if app exists in the stack
-    if splunkbase_app_name not in installed_apps:
-        raise HTTPException(
-            status_code=404, detail="App not found in this stack's installed apps."
-        )
-
-    # Run Ansible playbook for app removal
-    playbook = (
-        "remove_standalone_app.yml"
-        if stack_details["enterprise_deployment_type"] == "standalone"
-        else "remove_shc_app.yml"
-    )
-    ansible_vars = {
-        "splunk_app_name": splunkbase_app_name,
-    }
-
-    if stack_details["enterprise_deployment_type"] != "standalone":
-        ansible_vars.update({"shc_deployer_node": stack_details["shc_deployer_node"]})
-
-    run_ansible_playbook(
-        stack_id,
-        playbook,
-        inventory_path,
-        ansible_vars=ansible_vars,
-        creds={"username": splunk_username, "password": splunk_password},
-    )
-
-    # If SHC and apply_shc_bundle is true, apply the bundle
-    if stack_details["shc_cluster"] and apply_shc_bundle:
+        # Run the Ansible playbook to remove the app
         run_ansible_playbook(
             stack_id,
-            "apply_shc_bundle.yml",
-            inventory_path,
-            ansible_vars={},
-            limit=stack_details["shc_deployer_node"],
+            playbook,
+            ansible_vars=ansible_vars,
             creds={"username": splunk_username, "password": splunk_password},
         )
 
-    # Update the apps JSON file
-    del installed_apps[splunkbase_app_name]
-    with open(apps_file_path, "w") as f:
-        json.dump(installed_apps, f, indent=4)
+        # If SHC and apply_shc_bundle is true, apply the SHC bundle
+        if stack_details.get("shc_cluster") and apply_shc_bundle:
+            ansible_vars = {
+                "shc_deployer_node": stack_details["shc_deployer_node"],
+                "shc_members": stack_details["shc_members"],
+            }
+            run_ansible_playbook(
+                stack_id,
+                "apply_shc_bundle.yml",
+                ansible_vars=ansible_vars,
+                limit=stack_details["shc_deployer_node"],
+                creds={"username": splunk_username, "password": splunk_password},
+            )
 
-    return {
-        "message": f"App {splunkbase_app_name} deleted successfully",
-        "remaining_apps": installed_apps,
-    }
+        # Remove the app from Redis
+        redis_client.hdel(f"stack:{stack_id}:apps", splunkbase_app_name)
+
+        logger.info(
+            f"App '{splunkbase_app_name}' successfully deleted from stack '{stack_id}'."
+        )
+
+        return {
+            "message": f"App '{splunkbase_app_name}' deleted successfully.",
+            "remaining_apps": {
+                app_name: json.loads(details)
+                for app_name, details in redis_client.hgetall(
+                    f"stack:{stack_id}:apps"
+                ).items()
+            },
+        }
+
+    except Exception as e:
+        logger.error(f"Error deleting app '{splunkbase_app_name}': {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Unable to delete app '{splunkbase_app_name}'.",
+        )
 
 
 """
