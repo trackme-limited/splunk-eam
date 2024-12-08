@@ -1,4 +1,4 @@
-# Splunk Enterprise API Manager (Splunk AEM)
+# Splunk Enterprise API Manager by TrackMe Limited (Splunk AEM)
 
 ## Overview
 
@@ -17,7 +17,7 @@ Splunk AEM provides a RESTful API to manage Splunk Enterprise environments:
 - Create and manage authentication with bearer authentication tokens, which includes rotation, tokens expiration, tokens refresh and more.
 - Manage Splunk indexes programmatically to distributed or standalone environments.
 - Install and remove Splunk Base applications programmatically, on distributed or standalone environments.
-- Ibstall and remove Splunk Private applications programmatically, on distributed or standalone environments.
+- Install and remove Splunk Private applications programmatically, on distributed or standalone environments.
 - Trigger Splunk restarts programmatically, on distributed or standalone environments.
 - Trigger Splunk Indexer Cluster rolling restarts programmatically.
 - Trigger Splunk Search Head Cluster rolling restarts programmatically.
@@ -35,7 +35,7 @@ Splunk AEM provides a RESTful API to manage Splunk Enterprise environments:
 ### Installation
 
 - The container listens to 8443 port by default.
-- Download the Docker image for Splunk EAM fron our repository or DockerHub.
+- Download the Docker image for Splunk EAM from our repository or DockerHub.
 - Create two Docker volumes for the data persistence:
 
 *Splunk AEM data volume:*
