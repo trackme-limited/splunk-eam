@@ -47,6 +47,7 @@ DEFAULT_CONFIG = {
 class ConfigSchema(BaseModel):
     logging_level: str
     log_rotation: dict
+    token_expiration_minutes: int
 
 
 class AdminPasswordUpdate(BaseModel):
