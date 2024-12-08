@@ -189,9 +189,12 @@ async def log_requests(request, call_next):
     raw_url = str(request.url)
     sanitized_url = re.sub(
         r"(splunk_password=)[^&]+", r"\1*****", raw_url
-    )  # Mask the password
+    )  # Mask all instances of the password
 
+    # Log sanitized request details
     logger.info(f"Request: {request.method} {sanitized_url}")
+
+    # Proceed with the request and log the response
     response = await call_next(request)
     logger.info(f"Response: {response.status_code}")
     return response
