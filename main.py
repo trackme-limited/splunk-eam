@@ -639,9 +639,7 @@ def download_splunk_app(session_id, app_id, version, output_path):
 # Add logging middleware to capture API requests
 @app.middleware("http")
 async def log_requests(request, call_next):
-    logger.info(f"Request: {request.method} {request.url}")
     response = await call_next(request)
-    logger.info(f"Response: {response.status_code}")
     return response
 
 
