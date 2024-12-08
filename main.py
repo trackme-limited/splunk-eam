@@ -1568,37 +1568,56 @@ HTTP Method: POST
 
 
 # POST /stacks/{stack_id}/shc_rolling_restart
-@app.post("/stacks/{stack_id}/shc_rolling_restart")
+@app.post(
+    "/stacks/{stack_id}/shc_rolling_restart",
+    summary="Trigger SHC rolling restart for a stack",
+)
 async def shc_rolling_restart(
     stack_id: str,
-    splunk_username: str = Body(..., embed=True),
-    splunk_password: str = Body(..., embed=True),
+    splunk_username: str = Query(..., description="Splunk admin username"),
+    splunk_password: str = Query(..., description="Splunk admin password"),
 ):
-    stack_details = load_stack_from_redis(stack_id)
-    stack_dir, inventory_path, ssh_key_path = get_stack_paths(stack_id)
+    try:
+        # Retrieve stack details from Redis
+        stack_details = load_stack_from_redis(stack_id)
 
-    # Only for SHC
-    if stack_details["enterprise_deployment_type"] == "standalone":
-        raise HTTPException(
-            status_code=400, detail="SHC cluster is not enabled for this stack."
+        # Validate the deployment type
+        if stack_details["enterprise_deployment_type"] == "standalone":
+            raise HTTPException(
+                status_code=400,
+                detail="SHC cluster is not enabled for this stack.",
+            )
+
+        # Prepare Ansible variables
+        ansible_vars = {
+            "shc_deployer_node": stack_details["shc_deployer_node"],
+            "shc_members": stack_details["shc_members"],
+        }
+
+        # Trigger Rolling Restart via Ansible playbook
+        run_ansible_playbook(
+            stack_id,
+            "trigger_shc_rolling_restart.yml",
+            ansible_vars=ansible_vars,
+            limit=stack_details["shc_deployer_node"],
+            creds={"username": splunk_username, "password": splunk_password},
         )
 
-    # Trigger Rolling Restart
-    ansible_vars = {}
-    ansible_vars["shc_deployer_node"] = stack_details["shc_deployer_node"]
-    ansible_vars["shc_members"] = stack_details["shc_members"]
-    run_ansible_playbook(
-        stack_id,
-        "trigger_shc_rolling_restart.yml",
-        inventory_path,
-        ansible_vars=ansible_vars,
-        limit=stack_details["shc_deployer_node"],
-        creds={"username": splunk_username, "password": splunk_password},
-    )
+        logger.info(f"SHC rolling restart triggered for stack '{stack_id}'.")
 
-    return {
-        "message": "SHC Rolling Restart triggered successfully",
-    }
+        return {
+            "message": "SHC Rolling Restart triggered successfully",
+        }
+
+    except HTTPException as e:
+        logger.error(f"Error in SHC rolling restart for stack '{stack_id}': {e.detail}")
+        raise
+    except Exception as e:
+        logger.error(f"Unexpected error during SHC rolling restart: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Unable to trigger SHC rolling restart: {str(e)}",
+        )
 
 
 """
@@ -1615,29 +1634,48 @@ async def cluster_rolling_restart(
     splunk_username: str = Body(..., embed=True),
     splunk_password: str = Body(..., embed=True),
 ):
-    stack_details = load_stack_from_redis(stack_id)
-    stack_dir, inventory_path, ssh_key_path = get_stack_paths(stack_id)
+    # Retrieve stack metadata from Redis
+    stack_metadata = redis_client.hgetall(f"stack:{stack_id}:metadata")
+    if not stack_metadata:
+        raise HTTPException(
+            status_code=404, detail=f"Metadata for stack '{stack_id}' not found."
+        )
 
-    # Only for SHC
-    if stack_details["enterprise_deployment_type"] == "standalone":
+    # Validate the deployment type
+    if stack_metadata["enterprise_deployment_type"] == "standalone":
         raise HTTPException(
             status_code=400, detail="Indexer cluster is not enabled for this stack."
         )
 
-    # Trigger Rolling Restart
-    ansible_vars = {}
-    ansible_vars["target_node"] = stack_details["cluster_manager_node"]
-    run_ansible_playbook(
-        stack_id,
-        "trigger_cluster_rolling_restart.yml",
-        inventory_path,
-        ansible_vars=ansible_vars,
-        limit=stack_details["cluster_manager_node"],
-        creds={"username": splunk_username, "password": splunk_password},
-    )
+    # Validate that cluster_manager_node is specified
+    cluster_manager_node = stack_metadata.get("cluster_manager_node")
+    if not cluster_manager_node:
+        raise HTTPException(
+            status_code=400, detail="Cluster Manager Node is required for this action."
+        )
+
+    # Prepare Ansible variables
+    ansible_vars = {
+        "target_node": cluster_manager_node,
+    }
+
+    # Trigger the rolling restart using Ansible
+    try:
+        run_ansible_playbook(
+            stack_id=stack_id,
+            playbook_name="trigger_cluster_rolling_restart.yml",
+            ansible_vars=ansible_vars,
+            limit=cluster_manager_node,
+            creds={"username": splunk_username, "password": splunk_password},
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to trigger rolling restart: {str(e)}",
+        )
 
     return {
-        "message": "Indexer Cluster Rolling Restart triggered successfully",
+        "message": "Indexer Cluster Rolling Restart triggered successfully.",
     }
 
 
@@ -1652,36 +1690,43 @@ HTTP Method: POST
 @app.post("/stacks/{stack_id}/restart_splunk")
 async def restart_splunk(
     stack_id: str,
-    limit: str = Body(None, embed=True),  # Optional limit parameter
+    limit: Optional[str] = Body(None, embed=True),  # Optional limit parameter
 ):
-    stack_details = load_stack_from_redis(stack_id)
-    stack_dir, inventory_path, ssh_key_path = get_stack_paths(stack_id)
+    # Retrieve stack metadata from Redis
+    stack_metadata = redis_client.hgetall(f"stack:{stack_id}:metadata")
+    if not stack_metadata:
+        raise HTTPException(
+            status_code=404, detail=f"Metadata for stack '{stack_id}' not found."
+        )
 
-    # Trigger Splunk service restart
+    # Prepare Ansible variables
     ansible_vars = {}
 
-    # Format the limit if provided
+    # Parse and validate the limit parameter
     limit_hosts = None
     if limit:
-        if isinstance(limit, str):
-            limit_hosts = ",".join([host.strip() for host in limit.split(",")])
+        limit_hosts = ",".join([host.strip() for host in limit.split(",")])
 
-    # If environment is distributed, limit is mandatory
-    if stack_details["enterprise_deployment_type"] != "standalone":
-        if not limit_hosts:
-            raise HTTPException(
-                status_code=400,
-                detail="Limit parameter is required for distributed deployments.",
-            )
+    # If the deployment is distributed, limit is mandatory
+    if stack_metadata["enterprise_deployment_type"] != "standalone" and not limit_hosts:
+        raise HTTPException(
+            status_code=400,
+            detail="Limit parameter is required for distributed deployments.",
+        )
 
-    run_ansible_playbook(
-        stack_id,
-        "restart_splunk.yml",
-        inventory_path,
-        ansible_vars=ansible_vars,
-        limit=limit_hosts,
-        creds=None,
-    )
+    # Execute the Ansible playbook
+    try:
+        run_ansible_playbook(
+            stack_id=stack_id,
+            playbook_name="restart_splunk.yml",
+            ansible_vars=ansible_vars,
+            limit=limit_hosts,
+            creds=None,
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, detail=f"Failed to trigger Splunk restart: {str(e)}"
+        )
 
     return {
         "message": f"Splunk Restart triggered successfully for {'specified hosts' if limit_hosts else 'all hosts'}.",
