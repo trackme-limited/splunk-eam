@@ -182,6 +182,21 @@ async def authenticate_request(request, call_next):
     return response
 
 
+# mask sensitive parameters in logs
+@app.middleware("http")
+async def log_requests(request, call_next):
+    # Extract URL and mask sensitive parameters
+    raw_url = str(request.url)
+    sanitized_url = re.sub(
+        r"(splunk_password=)[^&]+", r"\1*****", raw_url
+    )  # Mask the password
+
+    logger.info(f"Request: {request.method} {sanitized_url}")
+    response = await call_next(request)
+    logger.info(f"Response: {response.status_code}")
+    return response
+
+
 @app.post("/update_password")
 def update_admin_password(request: AdminPasswordUpdate):
     if request.current_password != redis_client.get("admin_password"):
@@ -1134,10 +1149,10 @@ async def add_index(
 async def delete_index_endpoint(
     stack_id: str,
     index_name: str,
-    splunk_username: str = Query(...),
-    splunk_password: str = Query(...),
-    apply_cluster_bundle: bool = Query(True),  # Optional, default true
-    apply_shc_bundle: bool = Query(True),  # Optional, default true
+    splunk_username: str = Query(..., description="Splunk admin username"),
+    splunk_password: str = Query(..., description="Splunk admin password"),
+    apply_cluster_bundle: bool = Query(True, description="Apply cluster bundle"),
+    apply_shc_bundle: bool = Query(True, description="Apply SHC bundle"),
 ):
     # Validate stack existence
     if not redis_client.exists(f"stack:{stack_id}:metadata"):
@@ -1184,7 +1199,6 @@ async def delete_index_endpoint(
             run_ansible_playbook(
                 stack_id=stack_id,
                 playbook_name="remove_index.yml",
-                inventory_path=temp_inventory_path,
                 ansible_vars=ansible_vars,
                 limit=stack_metadata["cluster_manager_node"],
                 creds={"username": splunk_username, "password": splunk_password},
@@ -1195,7 +1209,6 @@ async def delete_index_endpoint(
                 run_ansible_playbook(
                     stack_id=stack_id,
                     playbook_name="apply_cluster_bundle.yml",
-                    inventory_path=temp_inventory_path,
                     limit=stack_metadata["cluster_manager_node"],
                     creds={"username": splunk_username, "password": splunk_password},
                 )
@@ -1210,7 +1223,6 @@ async def delete_index_endpoint(
                 run_ansible_playbook(
                     stack_id=stack_id,
                     playbook_name="remove_index.yml",
-                    inventory_path=temp_inventory_path,
                     ansible_vars=ansible_vars,
                     limit=stack_metadata["shc_deployer_node"],
                     creds={"username": splunk_username, "password": splunk_password},
@@ -1221,7 +1233,6 @@ async def delete_index_endpoint(
                     run_ansible_playbook(
                         stack_id=stack_id,
                         playbook_name="apply_shc_bundle.yml",
-                        inventory_path=temp_inventory_path,
                         ansible_vars={},
                         limit=stack_metadata["shc_deployer_node"],
                         creds={
@@ -1238,7 +1249,6 @@ async def delete_index_endpoint(
             run_ansible_playbook(
                 stack_id=stack_id,
                 playbook_name="remove_index.yml",
-                inventory_path=temp_inventory_path,
                 ansible_vars=ansible_vars,
                 limit="all",
                 creds={"username": splunk_username, "password": splunk_password},
@@ -1256,7 +1266,7 @@ async def delete_index_endpoint(
             os.remove(temp_inventory_path)
 
     return {
-        "message": f"Index '{index_name}' deleted successfully, for this change to take effect, ensure to apply push the bundles for distributed environments or restart Splunk for standalone.",
+        "message": f"Index '{index_name}' deleted successfully. For this change to take effect, ensure to push the bundles for distributed environments or restart Splunk for standalone.",
         "index": index_name,
     }
 
