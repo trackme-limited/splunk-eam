@@ -24,6 +24,12 @@ Splunk AEM provides a RESTful API to manage Splunk Enterprise environments:
 - Flexibility, listening port and SSL settings can be customised easily, you can also create your own endpoints and your own Ansible playbooks.
 - Secured by default, the API is SSL based as a default, and requires default credentials to be updated before endpoints can be used.
 
+## License
+
+**Splunk EAM is governed by TrackMe EULA license, see:**
+
+- [TrackMe EULA license](https://docs.trackme-solutions.com/latest/license.html)
+
 ## Requirements and Installation
 
 ### Requirements
