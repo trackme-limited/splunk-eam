@@ -15,6 +15,9 @@ from jose import JWTError, jwt
 from datetime import datetime, timedelta
 import json
 import os
+import importlib.util
+import pathlib
+import sys
 import subprocess
 import base64
 import shutil
@@ -36,10 +39,19 @@ CERT_DIR = "/app/certs"
 CERT_FILE = os.path.join(CERT_DIR, "ssl_cert.pem")
 KEY_FILE = os.path.join(CERT_DIR, "ssl_key.pem")
 
+# Path to custom scripts and Ansible directory
+CUSTOM_SCRIPTS_DIR = "/app/custom/bin"
+CUSTOM_ANSIBLE_DIR = "/app/custom/ansible"
+
 # Ensure necessary directories
-os.makedirs(CONFIG_DIR, exist_ok=True)
-os.makedirs(LOG_DIR, exist_ok=True)
-os.makedirs(CERT_DIR, exist_ok=True)
+for directory in [
+    CONFIG_DIR,
+    LOG_DIR,
+    CERT_DIR,
+    CUSTOM_SCRIPTS_DIR,
+    CUSTOM_ANSIBLE_DIR,
+]:
+    os.makedirs(directory, exist_ok=True)
 
 # Default configuration
 DEFAULT_CONFIG = {
@@ -120,6 +132,30 @@ def ensure_certificates():
         generate_self_signed_cert(CERT_FILE, KEY_FILE)
 
     return CERT_FILE, KEY_FILE
+
+
+# Function to dynamically load and attach routes from custom scripts
+def load_custom_routes(app: FastAPI):
+    """
+    Dynamically loads custom routes from Python files in the CUSTOM_SCRIPTS_DIR.
+    """
+    for script_path in pathlib.Path(CUSTOM_SCRIPTS_DIR).glob("*.py"):
+        module_name = script_path.stem  # Get the file name without extension
+        spec = importlib.util.spec_from_file_location(module_name, str(script_path))
+        module = importlib.util.module_from_spec(spec)
+        sys.modules[module_name] = module
+        try:
+            spec.loader.exec_module(module)  # Load the module
+            if hasattr(module, "register_routes") and callable(module.register_routes):
+                # Call the register_routes function, passing the app instance
+                module.register_routes(app)
+                logger.info(f"Custom routes from {module_name} loaded successfully.")
+            else:
+                logger.warning(
+                    f"Custom script {module_name} does not define 'register_routes(app)' function."
+                )
+        except Exception as e:
+            logger.error(f"Failed to load custom script {module_name}: {e}")
 
 
 # Load configuration
@@ -208,6 +244,9 @@ if not redis_client.exists("admin_password"):
 
 # init API
 app = FastAPI()
+
+# Load custom routes at startup
+load_custom_routes(app)
 
 
 @app.middleware("http")

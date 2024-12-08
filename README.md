@@ -506,6 +506,64 @@ You can test the Ansible connectivity to the stack by running the following comm
     }
 ```
 
+### Creating custom endpoints calling custom Ansible playbooks
+
+You can optionally extend the API with your own custom endpoints and using Ansible playbooks of yours.
+
+#### Mount bind volumes to /app/custom/bin and /app/custom/ansible
+
+First, you would make custom volumes available to the Docker container.
+
+Example, in the machine hosting Docker, say we have:
+
+```shell
+    /opt/splunk-eam/bin
+    /opt/splunk-eam/ansible
+```
+
+The bin directory will be mounted in the container in /app/custom/bin.
+The ansible directory will be mounted in the container in /app/custom/ansible.
+
+**You would make these directories available to the docker container:**
+
+```shell
+    docker run -v /opt/splunk-eam/bin:/app/custom/bin \
+            -v /opt/splunk-eam/ansible:/app/custom/ansible \
+            -p 8443:8443 splunk-eam:latest
+```
+
+You can then create your own endpoint using FastApi routing capabilities, the following is an example of a Python code that can be used to create custom endpoints:
+
+```python
+    from fastapi import APIRouter
+
+    def register_routes(app):
+        router = APIRouter()
+
+        @router.post("/custom_endpoint")
+        def custom_playbook_endpoint(stack_id: str):
+            """
+            Example endpoint to run a custom Ansible playbook.
+            """
+            playbook_name = "my_custom_playbook.yml"
+            ansible_vars = {"stack_id": stack_id}
+
+            # Path to custom playbooks
+            playbook_path = f"/app/custom/ansible/{playbook_name}"
+
+            if not pathlib.Path(playbook_path).exists():
+                raise HTTPException(status_code=404, detail=f"Playbook {playbook_name} not found.")
+
+            # Example call to run_ansible_playbook
+            run_ansible_playbook(stack_id, playbook_path, ansible_vars)
+
+            return {"message": f"Custom playbook {playbook_name} executed successfully."}
+
+        app.include_router(router)
+```
+
+Handle both the Python file(s) and Ansible playbook(s) and restart the Docker container, the endpoints should be now available and ready to be used.
+
 ### Using the API
 
 #### GET /docs/endpoints
