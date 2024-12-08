@@ -224,7 +224,9 @@ class Stack(BaseModel):
     shc_cluster: Optional[bool] = None  # Optional unless distributed with SHC
     cluster_manager_node: Optional[str] = None  # Optional unless distributed
     shc_deployer_node: Optional[str] = None  # Optional unless SHC cluster
-    shc_members: Optional[List[str]] = None  # Optional unless SHC cluster
+    shc_members: Optional[str] = (
+        None  # Optional unless SHC cluster (comma-separated list of members)
+    )
     ansible_python_interpreter: str = "/usr/bin/python3"  # Default Python interpreter
 
 
@@ -359,6 +361,10 @@ def load_stack_from_redis(stack_id: str):
             stack_details[key] = json.loads(value)  # Attempt to parse JSON
         except json.JSONDecodeError:
             stack_details[key] = value  # Fallback to plain string
+
+    # handle shc_members as a list from comma-separated string
+    if "shc_members" in stack_details:
+        stack_details["shc_members"] = stack_details["shc_members"].split(",")
 
     return stack_details
 
