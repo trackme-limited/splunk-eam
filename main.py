@@ -1729,5 +1729,5 @@ async def restart_splunk(
         )
 
     return {
-        "message": f"Splunk Restart triggered successfully for {'specified hosts' if limit_hosts else 'all hosts'}.",
+        "message": f"Splunk Restart triggered successfully.",
     }
