@@ -687,9 +687,16 @@ def run_ansible_playbook(
         sanitized_vars = ansible_vars.copy() if ansible_vars else {}
         if "splunk_password" in sanitized_vars:
             sanitized_vars["splunk_password"] = "*****"
+
         sanitized_command[sanitized_command.index("-e") + 1] = json.dumps(
             sanitized_vars
         )
+
+        # Additional sanitization for --auth user:password in the command
+        sanitized_command = [
+            re.sub(r"--auth\s+([^\s:]+):[^\s]+", r"--auth \1:*****", part)
+            for part in sanitized_command
+        ]
 
         # Ensure the logged command also masks sensitive information in SSH key paths
         sanitized_command = [
