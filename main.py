@@ -693,10 +693,10 @@ def run_ansible_playbook(
         )
 
         # Additional sanitization for --auth user:password in the command
-        sanitized_command = [
-            re.sub(r"-auth\s+'[^:]+:[^']+'", r"-auth '*****:*****'", part)
-            for part in sanitized_command
-        ]
+        def sanitize_auth(cmd_part):
+            return re.sub(r"(-auth\s+['\"]?)[^:]+:[^'\"]+(['\"]?)", r"\1*****:*****\2", cmd_part)
+
+        sanitized_command = [sanitize_auth(part) for part in sanitized_command]
 
         # Ensure the logged command also masks sensitive information in SSH key paths
         sanitized_command = [
