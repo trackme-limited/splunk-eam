@@ -1243,7 +1243,10 @@ async def add_index(
     # Load and update indexes
     indexes = get_indexes(stack_id)
     if name in indexes:
-        raise HTTPException(status_code=400, detail="Index already exists.")
+        return {
+            "message": "Index already exists.",
+            "index": indexes[name],
+        }
     indexes[name] = {"maxDataSizeMB": maxDataSizeMB, "datatype": datatype}
 
     # Retrieve stack details
