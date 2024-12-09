@@ -693,10 +693,10 @@ def run_ansible_playbook(
         )
 
         # Additional sanitization for --auth user:password in the command
-        def sanitize_auth(cmd_part):
-            return re.sub(r"(-auth\s+['\"]?)[^:]+:[^'\"]+(['\"]?)", r"\1*****:*****\2", cmd_part)
-
-        sanitized_command = [sanitize_auth(part) for part in sanitized_command]
+        sanitized_command = [
+            re.sub(r"-auth\s+'[^:]+:[^']+'", r"-auth '*****:*****'", part)
+            for part in sanitized_command
+        ]
 
         # Ensure the logged command also masks sensitive information in SSH key paths
         sanitized_command = [
@@ -704,7 +704,7 @@ def run_ansible_playbook(
             for part in sanitized_command
         ]
 
-        logger.info(f"Running Ansible playbook: (beta) {sanitized_command}")
+        logger.info(f"Running Ansible playbook: {sanitized_command}")
 
         # Run the Ansible playbook
         result = subprocess.run(
@@ -713,12 +713,22 @@ def run_ansible_playbook(
             stderr=subprocess.PIPE,
             text=True,
         )
-        logger.info(f"Ansible stdout: {result.stdout}")
+
+        # Sanitize sensitive data in Ansible output
+        def sanitize_output(output):
+            output = re.sub(r"-auth\s+'[^:]+:[^']+'", r"-auth '*****:*****'", output)
+            output = re.sub(r"--private-key\s+[^ ]+", "--private-key *****", output)
+            return output
+
+        sanitized_stdout = sanitize_output(result.stdout)
+        sanitized_stderr = sanitize_output(result.stderr)
+
+        logger.info(f"Ansible stdout: {sanitized_stdout}")
         if result.returncode != 0:
-            logger.error(f"Ansible stderr: {result.stderr}")
+            logger.error(f"Ansible stderr: {sanitized_stderr}")
             raise HTTPException(
                 status_code=500,
-                detail=f"Ansible playbook failed: {result.stderr.strip()}",
+                detail=f"Ansible playbook failed: {sanitized_stderr.strip()}",
             )
 
     finally:
