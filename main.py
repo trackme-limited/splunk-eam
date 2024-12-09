@@ -813,10 +813,16 @@ def download_splunk_app(session_id, app_id, version, output_path):
     )
     headers = {"X-Auth-Token": session_id}
 
-    @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=4, max=60))
+    @retry(
+        stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=4, max=60)
+    )
     def perform_download():
         return requests.get(
-            download_url, headers=headers, stream=True, allow_redirects=True, timeout=(10, 900)
+            download_url,
+            headers=headers,
+            stream=True,
+            allow_redirects=True,
+            timeout=(10, 900),
         )
 
     try:
@@ -828,7 +834,7 @@ def download_splunk_app(session_id, app_id, version, output_path):
                 detail=f"Failed to download app. HTTP {response.status_code}: {response.text}",
             )
 
-        content_length = int(response.headers.get('Content-Length', 0))
+        content_length = int(response.headers.get("Content-Length", 0))
         bytes_written = 0
 
         with open(output_path, "wb") as f:
@@ -836,7 +842,9 @@ def download_splunk_app(session_id, app_id, version, output_path):
                 if chunk:
                     f.write(chunk)
                     bytes_written += len(chunk)
-                    logger.info(f"Download progress: {bytes_written}/{content_length} bytes")
+                    logger.info(
+                        f"Download progress: {bytes_written}/{content_length} bytes"
+                    )
 
         logger.info(f"App downloaded successfully: {output_path}")
         return output_path
@@ -2123,6 +2131,126 @@ async def restart_splunk(
         return {
             "message": f"Splunk Restart triggered successfully for hosts: {limit_hosts}",
         }
+
+
+"""
+Endpoint: /stacks/{stack_id}/apply_cluster_bundle
+Description: This endpoint applies a cluster bundle on a distributed cluster manager.
+HTTP Method: POST
+"""
+
+
+@app.post("/stacks/{stack_id}/apply_cluster_bundle", summary="Apply cluster bundle")
+async def apply_cluster_bundle(
+    stack_id: str,
+    splunk_username: str = Body(..., embed=True),
+    splunk_password: str = Body(..., embed=True),
+):
+    """
+    Apply cluster bundle on a distributed cluster manager.
+    """
+    try:
+        # Retrieve stack metadata from Redis
+        stack_metadata = redis_client.hgetall(f"stack:{stack_id}:metadata")
+        if not stack_metadata:
+            raise HTTPException(
+                status_code=404, detail=f"Metadata for stack '{stack_id}' not found."
+            )
+
+        # Validate deployment type
+        if stack_metadata["enterprise_deployment_type"] != "distributed":
+            raise HTTPException(
+                status_code=400,
+                detail="Cluster bundle application is only valid for distributed deployments.",
+            )
+
+        # Validate cluster manager node
+        cluster_manager_node = stack_metadata.get("cluster_manager_node")
+        if not cluster_manager_node:
+            raise HTTPException(
+                status_code=400,
+                detail="Cluster manager node is required for this operation.",
+            )
+
+        # Run the Ansible playbook to apply the cluster bundle
+        run_ansible_playbook(
+            stack_id=stack_id,
+            playbook_name="apply_cluster_bundle.yml",
+            ansible_vars={},
+            limit=cluster_manager_node,
+            creds={"username": splunk_username, "password": splunk_password},
+        )
+
+        return {"message": "Cluster bundle applied successfully."}
+
+    except Exception as e:
+        logger.error(f"Error applying cluster bundle for stack '{stack_id}': {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Error applying cluster bundle: {str(e)}"
+        )
+
+
+"""
+Endpoint: /stacks/{stack_id}/apply_shc_bundle
+Description: This endpoint applies an SHC bundle on a deployer node.
+HTTP Method: POST
+"""
+
+
+@app.post("/stacks/{stack_id}/apply_shc_bundle", summary="Apply SHC bundle")
+async def apply_shc_bundle(
+    stack_id: str,
+    splunk_username: str = Body(..., embed=True),
+    splunk_password: str = Body(..., embed=True),
+):
+    """
+    Apply SHC bundle on a deployer node.
+    """
+    try:
+        # Retrieve stack metadata from Redis
+        stack_metadata = redis_client.hgetall(f"stack:{stack_id}:metadata")
+        if not stack_metadata:
+            raise HTTPException(
+                status_code=404, detail=f"Metadata for stack '{stack_id}' not found."
+            )
+
+        # Validate SHC cluster configuration
+        if not stack_metadata.get("shc_cluster", "").lower() == "true":
+            raise HTTPException(
+                status_code=400,
+                detail="SHC bundle application is only valid for SHC clusters.",
+            )
+
+        # Validate SHC deployer node
+        shc_deployer_node = stack_metadata.get("shc_deployer_node")
+        if not shc_deployer_node:
+            raise HTTPException(
+                status_code=400,
+                detail="SHC deployer node is required for this operation.",
+            )
+
+        # Prepare Ansible variables
+        ansible_vars = {
+            "shc_deployer_node": shc_deployer_node,
+            "shc_members": stack_metadata.get("shc_members", "").split(","),
+        }
+
+        # Run the Ansible playbook to apply the SHC bundle
+        run_ansible_playbook(
+            stack_id=stack_id,
+            playbook_name="apply_shc_bundle.yml",
+            ansible_vars=ansible_vars,
+            limit=shc_deployer_node,
+            creds={"username": splunk_username, "password": splunk_password},
+        )
+
+        return {"message": "SHC bundle applied successfully."}
+
+    except Exception as e:
+        logger.error(f"Error applying SHC bundle for stack '{stack_id}': {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Error applying SHC bundle: {str(e)}"
+        )
 
 
 if __name__ == "__main__":

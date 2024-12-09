@@ -863,3 +863,31 @@ Test the Ansible connection to the hosts in a stack.
     curl -k -X POST https://localhost:8443/stacks/stack_001/ansible_test \
     -H "Authorization: Bearer $token"
 ```
+
+#### POST /stacks/{stack_id}/apply_cluster_bundle
+
+Apply a cluster bundle on a distributed cluster manager.
+
+```shell
+    curl -k -X POST https://localhost:8443/stacks/stack_001/apply_cluster_bundle \
+    -H "Authorization: Bearer $token" \
+    -H "Content-Type: application/json" \
+    -d '{
+    "splunk_username": "admin",
+    "splunk_password": "password"
+    }'
+```
+
+#### POST /stacks/{stack_id}/apply_shc_bundle
+
+Apply an SHC bundle on a deployer node for a Search Head Cluster (SHC).
+
+```shell
+    curl -k -X POST https://localhost:8443/stacks/stack_001/apply_shc_bundle \
+    -H "Authorization: Bearer $token" \
+    -H "Content-Type: application/json" \
+    -d '{
+    "splunk_username": "admin",
+    "splunk_password": "password"
+    }'
+```
