@@ -694,7 +694,7 @@ def run_ansible_playbook(
 
         # Additional sanitization for --auth user:password in the command
         sanitized_command = [
-            re.sub(r"--auth\s+[\"']?([^\s\"':]+):[^\s\"']+[\"']?", r"--auth \1:*****", part)
+            re.sub(r"-auth '[^\:]*:[^\']*\'", r"--auth *****:*****", part)
             for part in sanitized_command
         ]
 
