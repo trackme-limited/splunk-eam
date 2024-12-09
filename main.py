@@ -704,7 +704,7 @@ def run_ansible_playbook(
             for part in sanitized_command
         ]
 
-        logger.info(f"Running Ansible playbook: {sanitized_command}")
+        logger.info(f"Running Ansible playbook: (beta) {sanitized_command}")
 
         # Run the Ansible playbook
         result = subprocess.run(
