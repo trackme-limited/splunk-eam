@@ -23,6 +23,8 @@ import base64
 import shutil
 import re
 import requests
+from requests.exceptions import Timeout
+from tenacity import retry, stop_after_attempt, wait_exponential
 import xml.etree.ElementTree as ET
 
 # Paths
@@ -805,15 +807,20 @@ def download_splunk_app(session_id, app_id, version, output_path):
     Raises:
         HTTPException: If the download fails.
     """
+
     download_url = (
         f"https://splunkbase.splunk.com/app/{app_id}/release/{version}/download/"
     )
     headers = {"X-Auth-Token": session_id}
 
-    try:
-        response = requests.get(
-            download_url, headers=headers, stream=True, allow_redirects=True
+    @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=4, max=60))
+    def perform_download():
+        return requests.get(
+            download_url, headers=headers, stream=True, allow_redirects=True, timeout=(10, 900)
         )
+
+    try:
+        response = perform_download()
 
         if response.status_code != 200:
             raise HTTPException(
@@ -821,15 +828,22 @@ def download_splunk_app(session_id, app_id, version, output_path):
                 detail=f"Failed to download app. HTTP {response.status_code}: {response.text}",
             )
 
-        # Write the response content to the file
+        content_length = int(response.headers.get('Content-Length', 0))
+        bytes_written = 0
+
         with open(output_path, "wb") as f:
             for chunk in response.iter_content(chunk_size=8192):
-                if chunk:  # Filter out keep-alive new chunks
+                if chunk:
                     f.write(chunk)
+                    bytes_written += len(chunk)
+                    logger.info(f"Download progress: {bytes_written}/{content_length} bytes")
 
         logger.info(f"App downloaded successfully: {output_path}")
         return output_path
 
+    except Timeout as e:
+        logger.error(f"Download timed out: {e}")
+        raise HTTPException(status_code=408, detail="Download request timed out.")
     except requests.exceptions.RequestException as e:
         logger.error(f"Error downloading Splunk app: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to download app: {str(e)}")
