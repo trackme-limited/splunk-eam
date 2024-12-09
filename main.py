@@ -216,14 +216,18 @@ logger.addHandler(file_handler)
 # Compression of rotated logs
 if compress_logs:
 
-    def compress_rotated_log(source_path):
+    def compress_rotated_log(source, dest):
         """Compress rotated logs automatically."""
-        if not source_path.endswith(".log"):
-            return
-        gz_path = f"{source_path}.gz"
-        with open(source_path, "rb") as log_file, gzip.open(gz_path, "wb") as gz_file:
-            gz_file.writelines(log_file)
-        os.remove(source_path)
+        try:
+            if not source.endswith(".log"):
+                return
+            gz_path = f"{source}.gz"
+            with open(source, "rb") as log_file, gzip.open(gz_path, "wb") as gz_file:
+                gz_file.writelines(log_file)
+            os.remove(source)
+            logger.info(f"Compressed log file: {source} -> {gz_path}")
+        except Exception as e:
+            logger.error(f"Error compressing log file '{source}': {e}")
 
     file_handler.rotator = compress_rotated_log
 
