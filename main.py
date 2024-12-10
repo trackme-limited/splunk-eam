@@ -1333,7 +1333,7 @@ async def add_index(
         ansible_vars["file_path"] = (
             "/opt/splunk/etc/manager-apps/001_splunk_aem/local/indexes.conf"
         )
-        run_ansible_playbook(
+        await run_ansible_playbook(
             stack_id=stack_id,
             playbook_name="add_index.yml",
             ansible_vars=ansible_vars,
@@ -1343,7 +1343,7 @@ async def add_index(
 
         # Apply cluster bundle if enabled
         if apply_cluster_bundle:
-            run_ansible_playbook(
+            await run_ansible_playbook(
                 stack_id=stack_id,
                 playbook_name="apply_cluster_bundle.yml",
                 limit=stack_metadata["cluster_manager_node"],
@@ -1357,7 +1357,7 @@ async def add_index(
             ansible_vars["file_path"] = (
                 "/opt/splunk/etc/shcluster/apps/001_splunk_aem/local/indexes.conf"
             )
-            run_ansible_playbook(
+            await run_ansible_playbook(
                 stack_id=stack_id,
                 playbook_name="add_index.yml",
                 ansible_vars=ansible_vars,
@@ -1367,7 +1367,7 @@ async def add_index(
 
             # Apply SHC bundle if enabled
             if apply_shc_bundle:
-                run_ansible_playbook(
+                await run_ansible_playbook(
                     stack_id=stack_id,
                     playbook_name="apply_shc_bundle.yml",
                     ansible_vars=ansible_vars,
@@ -1380,7 +1380,7 @@ async def add_index(
         ansible_vars["file_path"] = (
             "/opt/splunk/etc/apps/001_splunk_aem/local/indexes.conf"
         )
-        run_ansible_playbook(
+        await run_ansible_playbook(
             stack_id=stack_id,
             playbook_name="add_index.yml",
             ansible_vars=ansible_vars,
@@ -1449,7 +1449,7 @@ async def delete_index_endpoint(
             ansible_vars["file_path"] = (
                 "/opt/splunk/etc/manager-apps/001_splunk_aem/local/indexes.conf"
             )
-            run_ansible_playbook(
+            await run_ansible_playbook(
                 stack_id=stack_id,
                 playbook_name="remove_index.yml",
                 ansible_vars=ansible_vars,
@@ -1459,7 +1459,7 @@ async def delete_index_endpoint(
 
             # Apply cluster bundle if requested
             if apply_cluster_bundle:
-                run_ansible_playbook(
+                await run_ansible_playbook(
                     stack_id=stack_id,
                     playbook_name="apply_cluster_bundle.yml",
                     limit=stack_metadata["cluster_manager_node"],
@@ -1473,7 +1473,7 @@ async def delete_index_endpoint(
                 ansible_vars["file_path"] = (
                     "/opt/splunk/etc/shcluster/apps/001_splunk_aem/local/indexes.conf"
                 )
-                run_ansible_playbook(
+                await run_ansible_playbook(
                     stack_id=stack_id,
                     playbook_name="remove_index.yml",
                     ansible_vars=ansible_vars,
@@ -1483,7 +1483,7 @@ async def delete_index_endpoint(
 
                 # Apply SHC bundle if requested
                 if apply_shc_bundle:
-                    run_ansible_playbook(
+                    await run_ansible_playbook(
                         stack_id=stack_id,
                         playbook_name="apply_shc_bundle.yml",
                         ansible_vars={},
@@ -1499,7 +1499,7 @@ async def delete_index_endpoint(
             ansible_vars["file_path"] = (
                 "/opt/splunk/etc/apps/001_splunk_aem/local/indexes.conf"
             )
-            run_ansible_playbook(
+            await run_ansible_playbook(
                 stack_id=stack_id,
                 playbook_name="remove_index.yml",
                 ansible_vars=ansible_vars,
@@ -1663,7 +1663,7 @@ async def install_splunk_app(
             )
 
         # Run the Ansible playbook
-        run_ansible_playbook(
+        await run_ansible_playbook(
             stack_id,
             playbook,
             ansible_vars=ansible_vars,
@@ -1677,7 +1677,7 @@ async def install_splunk_app(
                     "shc_deployer_node": stack_details["shc_deployer_node"],
                     "shc_members": stack_details["shc_members"],
                 }
-                run_ansible_playbook(
+                await run_ansible_playbook(
                     stack_id,
                     "apply_shc_bundle.yml",
                     ansible_vars=ansible_vars,
@@ -1758,7 +1758,7 @@ async def delete_splunk_app(
             )
 
         # Run the Ansible playbook to remove the app
-        run_ansible_playbook(
+        await run_ansible_playbook(
             stack_id,
             playbook,
             ansible_vars=ansible_vars,
@@ -1772,7 +1772,7 @@ async def delete_splunk_app(
                     "shc_deployer_node": stack_details["shc_deployer_node"],
                     "shc_members": stack_details["shc_members"],
                 }
-                run_ansible_playbook(
+                await run_ansible_playbook(
                     stack_id,
                     "apply_shc_bundle.yml",
                     ansible_vars=ansible_vars,
@@ -1865,7 +1865,7 @@ async def install_private_app(
             limit = "all"
 
         # Run Ansible playbook
-        run_ansible_playbook(
+        await run_ansible_playbook(
             stack_id,
             playbook,
             ansible_vars=ansible_vars,
@@ -1875,7 +1875,7 @@ async def install_private_app(
 
         # Apply SHC bundle if requested
         if target == "shc" and apply_shc_bundle:
-            run_ansible_playbook(
+            await run_ansible_playbook(
                 stack_id,
                 "apply_shc_bundle.yml",
                 ansible_vars={
@@ -1941,7 +1941,7 @@ async def remove_private_app(
             limit = "all"
 
         # Run Ansible playbook
-        run_ansible_playbook(
+        await run_ansible_playbook(
             stack_id,
             playbook,
             ansible_vars=ansible_vars,
@@ -1951,7 +1951,7 @@ async def remove_private_app(
 
         # Apply SHC bundle if requested
         if target == "shc" and apply_shc_bundle:
-            run_ansible_playbook(
+            await run_ansible_playbook(
                 stack_id,
                 "apply_shc_bundle.yml",
                 ansible_vars={
@@ -2007,7 +2007,7 @@ async def shc_rolling_restart(
         }
 
         # Trigger Rolling Restart via Ansible playbook
-        run_ansible_playbook(
+        await run_ansible_playbook(
             stack_id,
             "trigger_shc_rolling_restart.yml",
             ansible_vars=ansible_vars,
@@ -2073,7 +2073,7 @@ async def cluster_rolling_restart(
 
     # Trigger the rolling restart using Ansible
     try:
-        run_ansible_playbook(
+        await run_ansible_playbook(
             stack_id=stack_id,
             playbook_name="trigger_cluster_rolling_restart.yml",
             ansible_vars=ansible_vars,
@@ -2132,7 +2132,7 @@ async def restart_splunk(
 
     # Execute the Ansible playbook
     try:
-        run_ansible_playbook(
+        await run_ansible_playbook(
             stack_id=stack_id,
             playbook_name="restart_splunk.yml",
             ansible_vars=ansible_vars,
@@ -2195,7 +2195,7 @@ async def apply_cluster_bundle(
             )
 
         # Run the Ansible playbook to apply the cluster bundle
-        run_ansible_playbook(
+        await run_ansible_playbook(
             stack_id=stack_id,
             playbook_name="apply_cluster_bundle.yml",
             ansible_vars={},
@@ -2258,7 +2258,7 @@ async def apply_shc_bundle(
         }
 
         # Run the Ansible playbook to apply the SHC bundle
-        run_ansible_playbook(
+        await run_ansible_playbook(
             stack_id=stack_id,
             playbook_name="apply_shc_bundle.yml",
             ansible_vars=ansible_vars,
@@ -2306,7 +2306,7 @@ async def shc_set_http_max_content(
         }
 
         # Run the playbook limited to SHC members
-        run_ansible_playbook(
+        await run_ansible_playbook(
             stack_id=stack_id,
             playbook_name="shc_members_set_http_max_content.yml",
             ansible_vars=ansible_vars,
