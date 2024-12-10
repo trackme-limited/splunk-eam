@@ -21,6 +21,7 @@ import sys
 import subprocess
 import base64
 import shutil
+import configparser
 import re
 import requests
 from requests.exceptions import Timeout
@@ -67,6 +68,44 @@ DEFAULT_CONFIG = {
     "token_expiration_minutes": 43200,
 }
 
+# Function to parse redis.conf
+def parse_redis_config(file_path="/app/config/redis.conf"):
+    """
+    Parse Redis configuration from the redis.conf file.
+    Returns a dictionary of key configuration options.
+    """
+    config = {}
+    try:
+        with open(file_path, "r") as f:
+            for line in f:
+                line = line.strip()
+                # Ignore comments and empty lines
+                if line.startswith("#") or not line:
+                    continue
+                # Split key-value pairs
+                if " " in line:
+                    key, value = line.split(maxsplit=1)
+                    config[key] = value
+    except FileNotFoundError:
+        print(f"Redis configuration file not found at {file_path}. Using defaults.")
+    return config
+
+# Load Redis configuration
+redis_config = parse_redis_config()
+
+# Extract Redis settings with fallbacks
+REDIS_HOST = redis_config.get("bind", "127.0.0.1")  # Default to localhost
+REDIS_PORT = int(redis_config.get("port", 6379))    # Default port 6379
+REDIS_DB = 0  # Default DB index (if needed, add it to the config)
+
+# Use a connection pool for Redis
+redis_pool = redis.ConnectionPool(
+    host=REDIS_HOST,
+    port=REDIS_PORT,
+    db=REDIS_DB,
+    decode_responses=True
+)
+redis_client = redis.StrictRedis(connection_pool=redis_pool)
 
 # Configuration schema using Pydantic
 class ConfigSchema(BaseModel):
@@ -232,16 +271,6 @@ if compress_logs:
             logger.error(f"Error compressing log file '{source}': {e}")
 
     file_handler.rotator = compress_rotated_log
-
-# Redis connection details
-REDIS_HOST = "localhost"
-REDIS_PORT = 6379
-REDIS_DB = 0
-
-# Initialize Redis client
-redis_client = redis.StrictRedis(
-    host=REDIS_HOST, port=REDIS_PORT, db=REDIS_DB, decode_responses=True
-)
 
 # Set default admin password if not already set
 DEFAULT_ADMIN_PASSWORD = os.getenv("DEFAULT_ADMIN_PASSWORD", "password")
