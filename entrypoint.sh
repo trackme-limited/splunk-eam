@@ -18,4 +18,4 @@ python -c "from main import ensure_certificates; ensure_certificates()"
 echo "Certificates are ready. Starting application..."
 
 # Start the application using Gunicorn with Uvicorn workers
-exec gunicorn main:app -c /app/config/gunicorn.conf
+exec gunicorn main:app -c /app/config/gunicorn.conf.py

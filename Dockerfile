@@ -27,7 +27,7 @@ RUN mkdir -p /app/data/ansible_tmp
 # Create a default configuration file
 RUN mkdir -p /app/config
 COPY splunk_eam_config.json /app/config/splunk_eam_config.json
-COPY gunicorn.conf /app/config/gunicorn.conf
+COPY gunicorn.conf.py /app/config/gunicorn.conf.py
 
 # Create a log directory
 RUN mkdir -p /app/logs
