@@ -4,7 +4,7 @@ from fastapi.security import HTTPBearer
 from starlette.responses import JSONResponse
 from pydantic import BaseModel, ValidationError
 from OpenSSL import crypto
-import uvicorn
+import asyncio
 import secrets
 from typing import Dict, Optional, List
 import logging
@@ -21,7 +21,6 @@ import sys
 import subprocess
 import base64
 import shutil
-import configparser
 import re
 import requests
 from requests.exceptions import Timeout
@@ -68,6 +67,7 @@ DEFAULT_CONFIG = {
     "token_expiration_minutes": 43200,
 }
 
+
 # Function to parse redis.conf
 def parse_redis_config(file_path="/app/config/redis.conf"):
     """
@@ -90,22 +90,21 @@ def parse_redis_config(file_path="/app/config/redis.conf"):
         print(f"Redis configuration file not found at {file_path}. Using defaults.")
     return config
 
+
 # Load Redis configuration
 redis_config = parse_redis_config()
 
 # Extract Redis settings with fallbacks
 REDIS_HOST = redis_config.get("bind", "127.0.0.1")  # Default to localhost
-REDIS_PORT = int(redis_config.get("port", 6379))    # Default port 6379
+REDIS_PORT = int(redis_config.get("port", 6379))  # Default port 6379
 REDIS_DB = 0  # Default DB index (if needed, add it to the config)
 
 # Use a connection pool for Redis
 redis_pool = redis.ConnectionPool(
-    host=REDIS_HOST,
-    port=REDIS_PORT,
-    db=REDIS_DB,
-    decode_responses=True
+    host=REDIS_HOST, port=REDIS_PORT, db=REDIS_DB, decode_responses=True
 )
 redis_client = redis.StrictRedis(connection_pool=redis_pool)
+
 
 # Configuration schema using Pydantic
 class ConfigSchema(BaseModel):
@@ -647,7 +646,7 @@ def ensure_stack_dir(stack_id: str):
     return stack_dir
 
 
-def run_ansible_playbook(
+async def run_ansible_playbook(
     stack_id: str,
     playbook_name: str,
     ansible_vars: dict = None,
@@ -723,13 +722,6 @@ def run_ansible_playbook(
             sanitized_vars
         )
 
-        # Additional sanitization for --auth user:password in the command
-        sanitized_command = [
-            re.sub(r"-auth\s+'[^:]+:[^']+'", r"-auth '*****:*****'", part)
-            for part in sanitized_command
-        ]
-
-        # Ensure the logged command also masks sensitive information in SSH key paths
         sanitized_command = [
             re.sub(r"--private-key\s+[^ ]+", "--private-key *****", part)
             for part in sanitized_command
@@ -737,13 +729,14 @@ def run_ansible_playbook(
 
         logger.info(f"Running Ansible playbook: {sanitized_command}")
 
-        # Run the Ansible playbook
-        result = subprocess.run(
-            command,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
+        # Run the Ansible playbook asynchronously
+        process = await asyncio.create_subprocess_exec(
+            *command,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
         )
+
+        stdout, stderr = await process.communicate()
 
         # Sanitize sensitive data in Ansible output
         def sanitize_output(output):
@@ -751,11 +744,11 @@ def run_ansible_playbook(
             output = re.sub(r"--private-key\s+[^ ]+", "--private-key *****", output)
             return output
 
-        sanitized_stdout = sanitize_output(result.stdout)
-        sanitized_stderr = sanitize_output(result.stderr)
+        sanitized_stdout = sanitize_output(stdout.decode())
+        sanitized_stderr = sanitize_output(stderr.decode())
 
         logger.info(f"Ansible stdout: {sanitized_stdout}")
-        if result.returncode != 0:
+        if process.returncode != 0:
             logger.error(f"Ansible stderr: {sanitized_stderr}")
             raise HTTPException(
                 status_code=500,
@@ -2281,6 +2274,7 @@ async def apply_shc_bundle(
             status_code=500, detail=f"Error applying SHC bundle: {str(e)}"
         )
 
+
 @app.post("/stacks/{stack_id}/shc_set_http_max_content")
 async def shc_set_http_max_content(
     stack_id: str,
@@ -2297,7 +2291,9 @@ async def shc_set_http_max_content(
         stack_metadata = redis_client.hgetall(f"stack:{stack_id}:metadata")
 
         # Validate stack type and SHC configuration
-        if stack_metadata["enterprise_deployment_type"] != "distributed" or not stack_details.get("shc_members"):
+        if stack_metadata[
+            "enterprise_deployment_type"
+        ] != "distributed" or not stack_details.get("shc_members"):
             raise HTTPException(
                 status_code=400,
                 detail="This action is only valid for distributed stacks with SHC enabled.",
