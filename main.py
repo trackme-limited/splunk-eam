@@ -2280,3 +2280,50 @@ async def apply_shc_bundle(
         raise HTTPException(
             status_code=500, detail=f"Error applying SHC bundle: {str(e)}"
         )
+
+@app.post("/stacks/{stack_id}/shc_set_http_max_content")
+async def shc_set_http_max_content(
+    stack_id: str,
+    splunk_username: str = Body(..., embed=True),
+    splunk_password: str = Body(..., embed=True),
+    http_max_content_length: int = Body(5000000000, embed=True),  # Default to 5GB
+):
+    """
+    Set HTTP Max Content Length for SHC members in server.conf.
+    """
+    try:
+        # Load stack details
+        stack_details = load_stack_from_redis(stack_id)
+        stack_metadata = redis_client.hgetall(f"stack:{stack_id}:metadata")
+
+        # Validate stack type and SHC configuration
+        if stack_metadata["enterprise_deployment_type"] != "distributed" or not stack_details.get("shc_members"):
+            raise HTTPException(
+                status_code=400,
+                detail="This action is only valid for distributed stacks with SHC enabled.",
+            )
+
+        # Prepare Ansible variables
+        ansible_vars = {
+            "http_max_content_length": http_max_content_length,
+            "file_path": "/opt/splunk/etc/system/local/server.conf",
+        }
+
+        # Run the playbook limited to SHC members
+        run_ansible_playbook(
+            stack_id=stack_id,
+            playbook_name="shc_members_set_http_max_content.yml",
+            ansible_vars=ansible_vars,
+            limit=",".join(stack_details["shc_members"]),
+            creds={"username": splunk_username, "password": splunk_password},
+        )
+
+        return {
+            "message": "HTTP Max Content Length set successfully in server.conf. Please achieve a rolling restart now."
+        }
+
+    except Exception as e:
+        logger.error(f"Error in setting HTTP Max Content Length: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to set HTTP Max Content Length: {str(e)}"
+        )

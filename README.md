@@ -891,3 +891,18 @@ Apply an SHC bundle on a deployer node for a Search Head Cluster (SHC).
     "splunk_password": "password"
     }'
 ```
+
+#### POST /stacks/{stack_id}/shc_set_http_max_content
+
+Set the HTTP Max Content Length for SHC members in server.conf. This action applies only to distributed stacks with SHC enabled.
+
+```shell
+curl -k -X POST https://localhost:8443/stacks/stack_001/shc_set_http_max_content \
+-H "Authorization: Bearer $token" \
+-H "Content-Type: application/json" \
+-d '{
+    "splunk_username": "admin",
+    "splunk_password": "password",
+    "http_max_content_length": 5000000000
+}'
+```
