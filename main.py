@@ -2251,20 +2251,3 @@ async def apply_shc_bundle(
         raise HTTPException(
             status_code=500, detail=f"Error applying SHC bundle: {str(e)}"
         )
-
-
-if __name__ == "__main__":
-    # Ensure certificates are available
-    cert_file, key_file = ensure_certificates()
-
-    # Retrieve the port from the environment variable or default to 8443
-    port = int(os.getenv("API_PORT", 8443))
-
-    # Run the FastAPI app with HTTPS
-    uvicorn.run(
-        "main:app",
-        host="0.0.0.0",
-        port=port,
-        ssl_certfile=cert_file,
-        ssl_keyfile=key_file,
-    )

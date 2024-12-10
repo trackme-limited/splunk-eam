@@ -6,7 +6,7 @@ RUN addgroup --system deployer && adduser --system --ingroup deployer --home /ho
 # Install dependencies
 RUN apt-get update && apt-get install -y \
     procps iputils-ping net-tools openssh-client redis-server openssl vim\
-    && rm -rf /var/lib/apt/lists/*
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
@@ -27,6 +27,7 @@ RUN mkdir -p /app/data/ansible_tmp
 # Create a default configuration file
 RUN mkdir -p /app/config
 COPY splunk_eam_config.json /app/config/splunk_eam_config.json
+COPY gunicorn.conf /app/config/gunicorn.conf
 
 # Create a log directory
 RUN mkdir -p /app/logs

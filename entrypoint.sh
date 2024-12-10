@@ -13,5 +13,9 @@ done
 
 echo "Redis is ready. Starting application..."
 
-# Start the Python application (main.py handles starting Uvicorn)
-exec python main.py
+# Ensure certificates are available
+python -c "from main import ensure_certificates; ensure_certificates()"
+echo "Certificates are ready. Starting application..."
+
+# Start the application using Gunicorn with Uvicorn workers
+exec gunicorn main:app -c /app/config/gunicorn.conf
