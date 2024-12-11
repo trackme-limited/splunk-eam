@@ -4,7 +4,7 @@ from fastapi.security import HTTPBearer
 from starlette.responses import JSONResponse
 from pydantic import BaseModel, ValidationError
 from OpenSSL import crypto
-import uvicorn
+import asyncio
 import secrets
 from typing import Dict, Optional, List
 import logging
@@ -66,6 +66,44 @@ DEFAULT_CONFIG = {
     },
     "token_expiration_minutes": 43200,
 }
+
+
+# Function to parse redis.conf
+def parse_redis_config(file_path="/app/config/redis.conf"):
+    """
+    Parse Redis configuration from the redis.conf file.
+    Returns a dictionary of key configuration options.
+    """
+    config = {}
+    try:
+        with open(file_path, "r") as f:
+            for line in f:
+                line = line.strip()
+                # Ignore comments and empty lines
+                if line.startswith("#") or not line:
+                    continue
+                # Split key-value pairs
+                if " " in line:
+                    key, value = line.split(maxsplit=1)
+                    config[key] = value
+    except FileNotFoundError:
+        print(f"Redis configuration file not found at {file_path}. Using defaults.")
+    return config
+
+
+# Load Redis configuration
+redis_config = parse_redis_config()
+
+# Extract Redis settings with fallbacks
+REDIS_HOST = redis_config.get("bind", "127.0.0.1")  # Default to localhost
+REDIS_PORT = int(redis_config.get("port", 6379))  # Default port 6379
+REDIS_DB = 0  # Default DB index (if needed, add it to the config)
+
+# Use a connection pool for Redis
+redis_pool = redis.ConnectionPool(
+    host=REDIS_HOST, port=REDIS_PORT, db=REDIS_DB, decode_responses=True
+)
+redis_client = redis.StrictRedis(connection_pool=redis_pool)
 
 
 # Configuration schema using Pydantic
@@ -232,16 +270,6 @@ if compress_logs:
             logger.error(f"Error compressing log file '{source}': {e}")
 
     file_handler.rotator = compress_rotated_log
-
-# Redis connection details
-REDIS_HOST = "localhost"
-REDIS_PORT = 6379
-REDIS_DB = 0
-
-# Initialize Redis client
-redis_client = redis.StrictRedis(
-    host=REDIS_HOST, port=REDIS_PORT, db=REDIS_DB, decode_responses=True
-)
 
 # Set default admin password if not already set
 DEFAULT_ADMIN_PASSWORD = os.getenv("DEFAULT_ADMIN_PASSWORD", "password")
@@ -618,7 +646,7 @@ def ensure_stack_dir(stack_id: str):
     return stack_dir
 
 
-def run_ansible_playbook(
+async def run_ansible_playbook(
     stack_id: str,
     playbook_name: str,
     ansible_vars: dict = None,
@@ -694,13 +722,6 @@ def run_ansible_playbook(
             sanitized_vars
         )
 
-        # Additional sanitization for --auth user:password in the command
-        sanitized_command = [
-            re.sub(r"-auth\s+'[^:]+:[^']+'", r"-auth '*****:*****'", part)
-            for part in sanitized_command
-        ]
-
-        # Ensure the logged command also masks sensitive information in SSH key paths
         sanitized_command = [
             re.sub(r"--private-key\s+[^ ]+", "--private-key *****", part)
             for part in sanitized_command
@@ -708,13 +729,14 @@ def run_ansible_playbook(
 
         logger.info(f"Running Ansible playbook: {sanitized_command}")
 
-        # Run the Ansible playbook
-        result = subprocess.run(
-            command,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
+        # Run the Ansible playbook asynchronously
+        process = await asyncio.create_subprocess_exec(
+            *command,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
         )
+
+        stdout, stderr = await process.communicate()
 
         # Sanitize sensitive data in Ansible output
         def sanitize_output(output):
@@ -722,11 +744,11 @@ def run_ansible_playbook(
             output = re.sub(r"--private-key\s+[^ ]+", "--private-key *****", output)
             return output
 
-        sanitized_stdout = sanitize_output(result.stdout)
-        sanitized_stderr = sanitize_output(result.stderr)
+        sanitized_stdout = sanitize_output(stdout.decode())
+        sanitized_stderr = sanitize_output(stderr.decode())
 
         logger.info(f"Ansible stdout: {sanitized_stdout}")
-        if result.returncode != 0:
+        if process.returncode != 0:
             logger.error(f"Ansible stderr: {sanitized_stderr}")
             raise HTTPException(
                 status_code=500,
@@ -1311,7 +1333,7 @@ async def add_index(
         ansible_vars["file_path"] = (
             "/opt/splunk/etc/manager-apps/001_splunk_aem/local/indexes.conf"
         )
-        run_ansible_playbook(
+        await run_ansible_playbook(
             stack_id=stack_id,
             playbook_name="add_index.yml",
             ansible_vars=ansible_vars,
@@ -1321,7 +1343,7 @@ async def add_index(
 
         # Apply cluster bundle if enabled
         if apply_cluster_bundle:
-            run_ansible_playbook(
+            await run_ansible_playbook(
                 stack_id=stack_id,
                 playbook_name="apply_cluster_bundle.yml",
                 limit=stack_metadata["cluster_manager_node"],
@@ -1335,7 +1357,7 @@ async def add_index(
             ansible_vars["file_path"] = (
                 "/opt/splunk/etc/shcluster/apps/001_splunk_aem/local/indexes.conf"
             )
-            run_ansible_playbook(
+            await run_ansible_playbook(
                 stack_id=stack_id,
                 playbook_name="add_index.yml",
                 ansible_vars=ansible_vars,
@@ -1345,7 +1367,7 @@ async def add_index(
 
             # Apply SHC bundle if enabled
             if apply_shc_bundle:
-                run_ansible_playbook(
+                await run_ansible_playbook(
                     stack_id=stack_id,
                     playbook_name="apply_shc_bundle.yml",
                     ansible_vars=ansible_vars,
@@ -1358,7 +1380,7 @@ async def add_index(
         ansible_vars["file_path"] = (
             "/opt/splunk/etc/apps/001_splunk_aem/local/indexes.conf"
         )
-        run_ansible_playbook(
+        await run_ansible_playbook(
             stack_id=stack_id,
             playbook_name="add_index.yml",
             ansible_vars=ansible_vars,
@@ -1427,7 +1449,7 @@ async def delete_index_endpoint(
             ansible_vars["file_path"] = (
                 "/opt/splunk/etc/manager-apps/001_splunk_aem/local/indexes.conf"
             )
-            run_ansible_playbook(
+            await run_ansible_playbook(
                 stack_id=stack_id,
                 playbook_name="remove_index.yml",
                 ansible_vars=ansible_vars,
@@ -1437,7 +1459,7 @@ async def delete_index_endpoint(
 
             # Apply cluster bundle if requested
             if apply_cluster_bundle:
-                run_ansible_playbook(
+                await run_ansible_playbook(
                     stack_id=stack_id,
                     playbook_name="apply_cluster_bundle.yml",
                     limit=stack_metadata["cluster_manager_node"],
@@ -1451,7 +1473,7 @@ async def delete_index_endpoint(
                 ansible_vars["file_path"] = (
                     "/opt/splunk/etc/shcluster/apps/001_splunk_aem/local/indexes.conf"
                 )
-                run_ansible_playbook(
+                await run_ansible_playbook(
                     stack_id=stack_id,
                     playbook_name="remove_index.yml",
                     ansible_vars=ansible_vars,
@@ -1461,7 +1483,7 @@ async def delete_index_endpoint(
 
                 # Apply SHC bundle if requested
                 if apply_shc_bundle:
-                    run_ansible_playbook(
+                    await run_ansible_playbook(
                         stack_id=stack_id,
                         playbook_name="apply_shc_bundle.yml",
                         ansible_vars={},
@@ -1477,7 +1499,7 @@ async def delete_index_endpoint(
             ansible_vars["file_path"] = (
                 "/opt/splunk/etc/apps/001_splunk_aem/local/indexes.conf"
             )
-            run_ansible_playbook(
+            await run_ansible_playbook(
                 stack_id=stack_id,
                 playbook_name="remove_index.yml",
                 ansible_vars=ansible_vars,
@@ -1641,7 +1663,7 @@ async def install_splunk_app(
             )
 
         # Run the Ansible playbook
-        run_ansible_playbook(
+        await run_ansible_playbook(
             stack_id,
             playbook,
             ansible_vars=ansible_vars,
@@ -1655,7 +1677,7 @@ async def install_splunk_app(
                     "shc_deployer_node": stack_details["shc_deployer_node"],
                     "shc_members": stack_details["shc_members"],
                 }
-                run_ansible_playbook(
+                await run_ansible_playbook(
                     stack_id,
                     "apply_shc_bundle.yml",
                     ansible_vars=ansible_vars,
@@ -1736,7 +1758,7 @@ async def delete_splunk_app(
             )
 
         # Run the Ansible playbook to remove the app
-        run_ansible_playbook(
+        await run_ansible_playbook(
             stack_id,
             playbook,
             ansible_vars=ansible_vars,
@@ -1750,7 +1772,7 @@ async def delete_splunk_app(
                     "shc_deployer_node": stack_details["shc_deployer_node"],
                     "shc_members": stack_details["shc_members"],
                 }
-                run_ansible_playbook(
+                await run_ansible_playbook(
                     stack_id,
                     "apply_shc_bundle.yml",
                     ansible_vars=ansible_vars,
@@ -1843,7 +1865,7 @@ async def install_private_app(
             limit = "all"
 
         # Run Ansible playbook
-        run_ansible_playbook(
+        await run_ansible_playbook(
             stack_id,
             playbook,
             ansible_vars=ansible_vars,
@@ -1853,7 +1875,7 @@ async def install_private_app(
 
         # Apply SHC bundle if requested
         if target == "shc" and apply_shc_bundle:
-            run_ansible_playbook(
+            await run_ansible_playbook(
                 stack_id,
                 "apply_shc_bundle.yml",
                 ansible_vars={
@@ -1919,7 +1941,7 @@ async def remove_private_app(
             limit = "all"
 
         # Run Ansible playbook
-        run_ansible_playbook(
+        await run_ansible_playbook(
             stack_id,
             playbook,
             ansible_vars=ansible_vars,
@@ -1929,7 +1951,7 @@ async def remove_private_app(
 
         # Apply SHC bundle if requested
         if target == "shc" and apply_shc_bundle:
-            run_ansible_playbook(
+            await run_ansible_playbook(
                 stack_id,
                 "apply_shc_bundle.yml",
                 ansible_vars={
@@ -1985,7 +2007,7 @@ async def shc_rolling_restart(
         }
 
         # Trigger Rolling Restart via Ansible playbook
-        run_ansible_playbook(
+        await run_ansible_playbook(
             stack_id,
             "trigger_shc_rolling_restart.yml",
             ansible_vars=ansible_vars,
@@ -2051,7 +2073,7 @@ async def cluster_rolling_restart(
 
     # Trigger the rolling restart using Ansible
     try:
-        run_ansible_playbook(
+        await run_ansible_playbook(
             stack_id=stack_id,
             playbook_name="trigger_cluster_rolling_restart.yml",
             ansible_vars=ansible_vars,
@@ -2110,7 +2132,7 @@ async def restart_splunk(
 
     # Execute the Ansible playbook
     try:
-        run_ansible_playbook(
+        await run_ansible_playbook(
             stack_id=stack_id,
             playbook_name="restart_splunk.yml",
             ansible_vars=ansible_vars,
@@ -2173,7 +2195,7 @@ async def apply_cluster_bundle(
             )
 
         # Run the Ansible playbook to apply the cluster bundle
-        run_ansible_playbook(
+        await run_ansible_playbook(
             stack_id=stack_id,
             playbook_name="apply_cluster_bundle.yml",
             ansible_vars={},
@@ -2236,7 +2258,7 @@ async def apply_shc_bundle(
         }
 
         # Run the Ansible playbook to apply the SHC bundle
-        run_ansible_playbook(
+        await run_ansible_playbook(
             stack_id=stack_id,
             playbook_name="apply_shc_bundle.yml",
             ansible_vars=ansible_vars,
@@ -2253,18 +2275,51 @@ async def apply_shc_bundle(
         )
 
 
-if __name__ == "__main__":
-    # Ensure certificates are available
-    cert_file, key_file = ensure_certificates()
+@app.post("/stacks/{stack_id}/shc_set_http_max_content")
+async def shc_set_http_max_content(
+    stack_id: str,
+    splunk_username: str = Body(..., embed=True),
+    splunk_password: str = Body(..., embed=True),
+    http_max_content_length: int = Body(5000000000, embed=True),  # Default to 5GB
+):
+    """
+    Set HTTP Max Content Length for SHC members in server.conf.
+    """
+    try:
+        # Load stack details
+        stack_details = load_stack_from_redis(stack_id)
+        stack_metadata = redis_client.hgetall(f"stack:{stack_id}:metadata")
 
-    # Retrieve the port from the environment variable or default to 8443
-    port = int(os.getenv("API_PORT", 8443))
+        # Validate stack type and SHC configuration
+        if stack_metadata[
+            "enterprise_deployment_type"
+        ] != "distributed" or not stack_details.get("shc_members"):
+            raise HTTPException(
+                status_code=400,
+                detail="This action is only valid for distributed stacks with SHC enabled.",
+            )
 
-    # Run the FastAPI app with HTTPS
-    uvicorn.run(
-        "main:app",
-        host="0.0.0.0",
-        port=port,
-        ssl_certfile=cert_file,
-        ssl_keyfile=key_file,
-    )
+        # Prepare Ansible variables
+        ansible_vars = {
+            "http_max_content_length": http_max_content_length,
+            "file_path": "/opt/splunk/etc/system/local/server.conf",
+        }
+
+        # Run the playbook limited to SHC members
+        await run_ansible_playbook(
+            stack_id=stack_id,
+            playbook_name="shc_members_set_http_max_content.yml",
+            ansible_vars=ansible_vars,
+            limit=",".join(stack_details["shc_members"]),
+            creds={"username": splunk_username, "password": splunk_password},
+        )
+
+        return {
+            "message": "HTTP Max Content Length set successfully in server.conf. Please achieve a rolling restart now."
+        }
+
+    except Exception as e:
+        logger.error(f"Error in setting HTTP Max Content Length: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to set HTTP Max Content Length: {str(e)}"
+        )

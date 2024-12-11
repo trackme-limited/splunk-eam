@@ -1,0 +1,34 @@
+---
+- name: Set HTTP Max Content Length for SHC members
+  hosts: all
+  become: yes
+  vars:
+    http_max_content_length: 5000000000 # Default to 5GB
+    file_path: "/opt/splunk/etc/system/local/server.conf"
+  tasks:
+    - name: Ensure directory exists for server.conf
+      file:
+        path: "{{ file_path | dirname }}"
+        state: directory
+        owner: splunk
+        group: splunk
+        mode: "0755"
+
+    - name: Ensure server.conf file exists
+      file:
+        path: "{{ file_path }}"
+        state: touch
+        owner: splunk
+        group: splunk
+        mode: "0644"
+
+    - name: Set HTTP Max Content Length in server.conf
+      ini_file:
+        path: "{{ file_path }}"
+        section: "httpServer"
+        option: "max_content_length"
+        value: "{{ http_max_content_length }}"
+        state: present
+        owner: splunk
+        group: splunk
+        mode: "0644"
