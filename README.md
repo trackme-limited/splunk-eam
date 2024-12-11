@@ -170,6 +170,59 @@ You could add a quick summary table for all environment variables for easy refer
 
 To upgrade Splunk EAM, you only need to ensure that you have pulled or refreshed your local Docker registry, then restart your container.
 
+### Hosting the Splunk EAM API behind a reverse proxy
+
+If the API is hosted behind a reverse proxy, such as Nginx, ensure that you allow for suffiscient timeout values.
+
+Indeed, some operations such as applying the Search Head Cluster bundle can require a certain amount time to be completed.
+
+The following shows a functional configuration for Nginx:
+
+```shell
+    server {
+        server_name splunk-eam.mydomain.com;
+
+        root /var/www/html;
+        index index.html index.htm index.nginx-debian.html;
+
+        # Proxy requests to Splunk AEM
+        location / {
+            proxy_pass https://127.0.0.1:8443; # internal port
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+
+            # Allow larger payloads
+            client_max_body_size 1000M;
+
+            # Extend timeouts for long-running requests
+            proxy_connect_timeout 1800s;  # Time to establish a connection to the backend
+            proxy_read_timeout 1800s;     # Time to wait for the backend response
+            proxy_send_timeout 1800s;     # Time to send the request to the backend
+            send_timeout 1800s;           # Time to send response to the client
+
+        }
+
+        listen 443 ssl;
+        ssl_certificate /etc/letsencrypt/live/splunk-eam.mydomain.com/fullchain.pem;
+        ssl_certificate_key /etc/letsencrypt/live/splunk-eam.mydomain.com/privkey.pem;
+        include /etc/letsencrypt/options-ssl-nginx.conf;
+        ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;
+
+    }
+
+    server {
+        if ($host = splunk-eam.mydomain.com) {
+            return 301 https://$host$request_uri;
+        }
+
+        listen 80;
+        server_name splunk-eam.mydomain.com;
+        return 404;
+    }
+```
+
 ### Update the default admin credentials
 
 **Before** you can start using the API, you need to update the default admin credentials. The default credentials are:
