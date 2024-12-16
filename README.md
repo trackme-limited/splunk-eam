@@ -109,22 +109,48 @@ Start the container and review the container logs, example of expected results:
 
 The container is ready to be used.
 
-### Port Configuration and SSL
+### Splunk EAM configuration
 
-#### Port Configuration
-
-The API allows users to configure the port it listens on via environment variables when running the Docker container.
-
-- **Default Port:** `8443`
-- **Custom Port:** To override the default port, set the `API_PORT` environment variable during container startup.
-
-**Examples:**
-
-- Running the container with the default port:
+You can customise various aspects of Splunk EAM by modifying the generated configuration file, this file is generated first when the container started, meant to be stored in a persistent volume, you can therefore modify it up to your needs:
 
 ```shell
-    docker run -p 8443:8443 your_image_name
+    /app/config/gunicorn.conf.py
 ```
+
+The default configuration looks like the following:
+
+```shell
+    #
+    # gunicorn.conf.py
+    #
+
+    # Bind to all interfaces on port 8443
+    bind = "0.0.0.0:8443"
+
+    # Worker configuration
+    workers = 8  # Adjust based on `2-4 * (CPU cores)`
+    worker_class = "uvicorn.workers.UvicornWorker"
+    threads = 4  # Threads per worker for concurrency
+
+    # Timeout settings for long-running tasks
+    timeout = 1800  # Allow up to 30 minutes for Ansible tasks
+    graceful_timeout = 1800  # Clean worker shutdown
+
+    # Max requests for stability
+    max_requests = 1000
+    max_requests_jitter = 100
+
+    # SSL configuration
+    certfile = "/app/certs/ssl_cert.pem"
+    keyfile = "/app/certs/ssl_key.pem"
+
+    # Logging
+    accesslog = "/app/logs/gunicorn_access.log"
+    errorlog = "/app/logs/gunicorn_error.log"
+    loglevel = "info"
+```
+
+You can for instance change the listening port, use your own certificates, manage timeouts values, etc.
 
 #### SSL Configuration
 
@@ -165,7 +191,6 @@ You could add a quick summary table for all environment variables for easy refer
 
 | Variable                | Description                                        | Default Value |
 |-------------------------|----------------------------------------------------|---------------|
-| `PORT`                  | Port on which the API listens.                    | `8443`        |
 | `USE_EXTERNAL_CERT`      | Enable to use custom SSL certificates.            | `false`       |
 | `EXTERNAL_CERT_FILE`     | Path to the custom SSL certificate file.          | Empty         |
 | `EXTERNAL_KEY_FILE`      | Path to the custom SSL key file.                  | Empty         |
