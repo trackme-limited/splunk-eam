@@ -47,7 +47,7 @@ Splunk AEM provides a RESTful API to manage Splunk Enterprise environments:
 **Pull the latest release in Docker in one command:**
 
 ```shell
-    docker push trackmelimited/splunk-eam:latest
+    docker pull trackmelimited/splunk-eam:latest
 ```
 
 ### Installation
@@ -67,6 +67,10 @@ Splunk AEM provides a RESTful API to manage Splunk Enterprise environments:
 *Splunk AEM config volume:*
 
 - Create a docker volume called ``splunk-aem-config`` to store the configuration files of the Splunk AEM API.
+
+```shell
+    docker volume create splunk-aem-config
+```
 
 Start the container, example:
 
