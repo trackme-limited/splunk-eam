@@ -26,9 +26,9 @@ Splunk AEM provides a RESTful API to manage Splunk Enterprise environments:
 
 ## License
 
-**Splunk EAM is governed by TrackMe EULA license, see:**
+**Splunk EAM is governed by Apache 2.0, see:**
 
-- [TrackMe EULA license](https://docs.trackme-solutions.com/latest/license.html)
+- <https://www.apache.org/licenses/LICENSE-2.0>
 
 ## Requirements and Installation
 
