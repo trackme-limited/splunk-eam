@@ -1,0 +1,132 @@
+[
+  { "name": "lastchanceindex", "maxDataSizeMB": 5000, "searchableDays": 90 },
+  { "name": "cim_modactions", "maxDataSizeMB": 5000, "searchableDays": 90 },
+  { "name": "windows", "maxDataSizeMB": 5000, "searchableDays": 90 },
+  { "name": "retail", "maxDataSizeMB": 5000, "searchableDays": 90 },
+  { "name": "linux_emea", "maxDataSizeMB": 5000, "searchableDays": 90 },
+  { "name": "linux_amer", "maxDataSizeMB": 5000, "searchableDays": 90 },
+  { "name": "linux_apac", "maxDataSizeMB": 5000, "searchableDays": 90 },
+  { "name": "network", "maxDataSizeMB": 5000, "searchableDays": 90 },
+  { "name": "firewall", "maxDataSizeMB": 5000, "searchableDays": 90 },
+  {
+    "name": "endpoints_metrics",
+    "maxDataSizeMB": 5000,
+    "searchableDays": 90,
+    "datatype": "metric"
+  },
+  { "name": "linux", "maxDataSizeMB": 5000, "searchableDays": 90 },
+  { "name": "webserver", "maxDataSizeMB": 5000, "searchableDays": 90 },
+  { "name": "batch", "maxDataSizeMB": 5000, "searchableDays": 90 },
+  { "name": "trackme_notable", "maxDataSizeMB": 5000, "searchableDays": 90 },
+  { "name": "trackme_summary", "maxDataSizeMB": 5000, "searchableDays": 90 },
+  { "name": "trackme_audit", "maxDataSizeMB": 5000, "searchableDays": 90 },
+  {
+    "name": "trackme_metrics",
+    "maxDataSizeMB": 5000,
+    "searchableDays": 90,
+    "datatype": "metric"
+  },
+  {
+    "name": "trackme_custom_notable",
+    "maxDataSizeMB": 5000,
+    "searchableDays": 90
+  },
+  {
+    "name": "trackme_custom_summary",
+    "maxDataSizeMB": 5000,
+    "searchableDays": 90
+  },
+  {
+    "name": "trackme_custom_audit",
+    "maxDataSizeMB": 5000,
+    "searchableDays": 90
+  },
+  {
+    "name": "trackme_custom_metrics",
+    "maxDataSizeMB": 5000,
+    "searchableDays": 90,
+    "datatype": "metric"
+  },
+  { "name": "eventgen-linux", "maxDataSizeMB": 5000, "searchableDays": 90 },
+  { "name": "eventgen-windows", "maxDataSizeMB": 5000, "searchableDays": 90 },
+  { "name": "eventgen-batch", "maxDataSizeMB": 5000, "searchableDays": 90 },
+  { "name": "eventgen-firewall", "maxDataSizeMB": 5000, "searchableDays": 90 },
+  { "name": "eventgen-webserver", "maxDataSizeMB": 5000, "searchableDays": 90 },
+  { "name": "cribl_datagen", "maxDataSizeMB": 5000, "searchableDays": 90 },
+  {
+    "name": "cribl_metrics",
+    "maxDataSizeMB": 5000,
+    "searchableDays": 90,
+    "datatype": "metric"
+  },
+  { "name": "notable", "maxDataSizeMB": 5000, "searchableDays": 90 },
+  { "name": "soar_audit", "maxDataSizeMB": 5000, "searchableDays": 90 },
+  { "name": "phantom_action_run", "maxDataSizeMB": 5000, "searchableDays": 90 },
+  { "name": "phantom_app", "maxDataSizeMB": 5000, "searchableDays": 90 },
+  { "name": "phantom_app_run", "maxDataSizeMB": 5000, "searchableDays": 90 },
+  { "name": "phantom_artifact", "maxDataSizeMB": 5000, "searchableDays": 90 },
+  { "name": "phantom_asset", "maxDataSizeMB": 5000, "searchableDays": 90 },
+  { "name": "phantom_container", "maxDataSizeMB": 5000, "searchableDays": 90 },
+  {
+    "name": "phantom_container_attachment",
+    "maxDataSizeMB": 5000,
+    "searchableDays": 90
+  },
+  {
+    "name": "phantom_container_comment",
+    "maxDataSizeMB": 5000,
+    "searchableDays": 90
+  },
+  {
+    "name": "phantom_custom_function",
+    "maxDataSizeMB": 5000,
+    "searchableDays": 90
+  },
+  {
+    "name": "phantom_decided_list",
+    "maxDataSizeMB": 5000,
+    "searchableDays": 90
+  },
+  { "name": "phantom_note", "maxDataSizeMB": 5000, "searchableDays": 90 },
+  { "name": "phantom_playbook", "maxDataSizeMB": 5000, "searchableDays": 90 },
+  { "name": "os", "maxDataSizeMB": 5000, "searchableDays": 90 },
+  { "name": "osnix", "maxDataSizeMB": 5000, "searchableDays": 90 },
+  { "name": "osnixsec", "maxDataSizeMB": 5000, "searchableDays": 90 },
+  { "name": "splunk_app_soar", "maxDataSizeMB": 5000, "searchableDays": 90 },
+  { "name": "mlgen", "maxDataSizeMB": 5000, "searchableDays": 90 },
+  { "name": "latgen", "maxDataSizeMB": 5000, "searchableDays": 90 },
+  { "name": "prd1_eu_linux", "maxDataSizeMB": 5000, "searchableDays": 90 },
+  { "name": "prd1_eu_syslog", "maxDataSizeMB": 5000, "searchableDays": 90 },
+  { "name": "prd1_na_linux", "maxDataSizeMB": 5000, "searchableDays": 90 },
+  { "name": "prd1_na_syslog", "maxDataSizeMB": 5000, "searchableDays": 90 },
+  { "name": "prd1_uk_linux", "maxDataSizeMB": 5000, "searchableDays": 90 },
+  { "name": "prd1_uk_syslog", "maxDataSizeMB": 5000, "searchableDays": 90 },
+  {
+    "name": "telegraf",
+    "maxDataSizeMB": 5000,
+    "searchableDays": 90,
+    "datatype": "metric"
+  },
+  {
+    "name": "os-unix-nmon-metrics",
+    "maxDataSizeMB": 5000,
+    "searchableDays": 90,
+    "datatype": "metric"
+  },
+  {
+    "name": "os-unix-nmon-events",
+    "maxDataSizeMB": 5000,
+    "searchableDays": 90
+  },
+  {
+    "name": "os-unix-nmon-config",
+    "maxDataSizeMB": 5000,
+    "searchableDays": 90
+  },
+  {
+    "name": "os-unix-nmon-internal",
+    "maxDataSizeMB": 5000,
+    "searchableDays": 90
+  },
+  { "name": "prd1_sampling", "maxDataSizeMB": 5000, "searchableDays": 90 }
+]

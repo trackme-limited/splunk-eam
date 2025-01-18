@@ -1,0 +1,25 @@
+[
+  { "name": "trackme", "splunkbaseID": 4621, "version": "2.1.7" },
+  { "name": "Splunk_SA_CIM", "splunkbaseID": 1621, "version": "6.0.0" },
+  { "name": "lookup_editor", "splunkbaseID": 1724, "version": "4.0.4" },
+  { "name": "Splunk_ML_Toolkit", "splunkbaseID": 2890, "version": "5.5.0" },
+  {
+    "name": "Splunk_SA_Scientific_Python_linux_x86_64",
+    "splunkbaseID": 2882,
+    "version": "4.2.2"
+  },
+  { "name": "semicircle_donut", "splunkbaseID": 4378, "version": "1.2.6" },
+  { "name": "Splunk_TA_windows", "splunkbaseID": 742, "version": "9.0.1" },
+  { "name": "Splunk_TA_nix", "splunkbaseID": 833, "version": "9.2.0" },
+  { "name": "Splunk_TA_juniper", "splunkbaseID": 2847, "version": "1.6.0" },
+  { "name": "Splunk_TA_apache", "splunkbaseID": 3186, "version": "2.1.0" },
+  { "name": "Splunk_TA_nginx", "splunkbaseID": 3258, "version": "3.3.0" },
+  { "name": "splunk_app_soar", "splunkbaseID": 6361, "version": "1.0.67" },
+  { "name": "phantom", "splunkbaseID": 3411, "version": "4.3.21" },
+  {
+    "name": "TA-jira-service-desk-simple-addon",
+    "splunkbaseID": 4958,
+    "version": "2.0.19"
+  },
+  { "name": "sa-littlehelper", "splunkbaseID": 6368, "version": "1.4.1" }
+]
