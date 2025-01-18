@@ -25,11 +25,13 @@
     - name: Add or update index stanzas
       ini_file:
         path: "{{ file_path }}"
-        section: "{{ item.name }}"
-        option: "{{ item.option }}"
-        value: "{{ item.value }}"
+        section: "{{ item.0.name }}" # Ensure correct reference to the index name
+        option: "{{ item.1.option }}" # Extract individual option
+        value: "{{ item.1.value }}" # Extract value
         state: present
         owner: splunk
         group: splunk
         mode: "0644"
       loop: "{{ indexes | subelements('options') }}"
+      loop_control:
+        label: "Index: {{ item.0.name }} | Option: {{ item.1.option }} = {{ item.1.value }}"
