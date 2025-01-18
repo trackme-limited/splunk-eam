@@ -1401,11 +1401,11 @@ async def add_index(
 @app.post("/stacks/{stack_id}/batch_indexes")
 async def batch_add_indexes(
     stack_id: str,
-    splunk_username: str = Body(..., embed=True),
-    splunk_password: str = Body(..., embed=True),
-    indexes: List[Dict[str, Optional[str]]] = Body(..., embed=True),
-    apply_cluster_bundle: bool = Body(True, embed=True),
-    apply_shc_bundle: bool = Body(True, embed=True),
+    splunk_username: str = Body(...),  # Removed embed=True
+    splunk_password: str = Body(...),
+    indexes: List[Dict[str, int]] = Body(...),  # Allow int values
+    apply_cluster_bundle: bool = Body(True),
+    apply_shc_bundle: bool = Body(True),
 ):
     """
     Batch create multiple indexes in a single request.
