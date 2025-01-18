@@ -1404,8 +1404,8 @@ async def batch_add_indexes(
     splunk_username: str = Body(...),  # Removed embed=True
     splunk_password: str = Body(...),
     indexes: List[Dict[str, int]] = Body(...),  # Allow int values
-    apply_cluster_bundle: bool = Body(True),
-    apply_shc_bundle: bool = Body(True),
+    apply_cluster_bundle: bool = Body(...),
+    apply_shc_bundle: bool = Body(...),
 ):
     """
     Batch create multiple indexes in a single request.
