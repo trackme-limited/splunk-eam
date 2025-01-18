@@ -1401,7 +1401,7 @@ async def add_index(
 @app.post("/stacks/{stack_id}/batch_indexes")
 async def batch_add_indexes(
     stack_id: str,
-    splunk_username: str = Body(...),  # Removed embed=True
+    splunk_username: str = Body(...),
     splunk_password: str = Body(...),
     indexes: List[Dict[str, Any]] = Body(...),
     apply_cluster_bundle: bool = Body(...),
@@ -1409,13 +1409,6 @@ async def batch_add_indexes(
 ):
     """
     Batch create multiple indexes in a single request.
-
-    Parameters:
-    - stack_id: The target Splunk stack.
-    - indexes: List of index objects containing:
-        - name (str): The index name.
-        - maxDataSizeMB (int, optional): The max data size (default: 500GB).
-        - datatype (str, optional): 'event' or 'metric' (default: 'event').
     """
     stack_metadata = redis_client.hgetall(f"stack:{stack_id}:metadata")
     if not stack_metadata:
@@ -1424,118 +1417,108 @@ async def batch_add_indexes(
     stack_details = load_stack_from_redis(stack_id)
     existing_indexes = get_indexes(stack_id)
 
-    created_indexes = []
-    failed_indexes = []
-
+    # Prepare the list of indexes for Ansible
+    ansible_indexes = []
     for index in indexes:
         name = index.get("name")
         maxDataSizeMB = index.get("maxDataSizeMB", 500 * 1024)  # Default 500GB in MB
         datatype = index.get("datatype", "event")
 
-        # Validate datatype
-        if datatype not in ["event", "metric"]:
-            failed_indexes.append(
-                {
-                    "name": name,
-                    "error": "Invalid datatype. Must be 'event' or 'metric'.",
-                }
-            )
-            continue
-
         # Skip index if it already exists
         if name in existing_indexes:
-            failed_indexes.append({"name": name, "error": "Index already exists."})
             continue
 
-        # Prepare index data
-        existing_indexes[name] = {"maxDataSizeMB": maxDataSizeMB, "datatype": datatype}
-        ansible_vars = {
-            "index_name": name,
-            "maxDataSizeMB": maxDataSizeMB,
-            "datatype": datatype,
-        }
+        # Build structured index object
+        ansible_indexes.append(
+            {
+                "name": name,
+                "options": [
+                    {"option": "maxDataSizeMB", "value": str(maxDataSizeMB)},
+                    {"option": "datatype", "value": datatype},
+                ],
+            }
+        )
 
-        try:
-            if stack_metadata["enterprise_deployment_type"] == "distributed":
-                ansible_vars["file_path"] = (
-                    "/opt/splunk/etc/manager-apps/001_splunk_aem/local/indexes.conf"
-                )
-                await run_ansible_playbook(
-                    stack_id=stack_id,
-                    playbook_name="add_index.yml",
-                    ansible_vars=ansible_vars,
-                    limit=stack_metadata["cluster_manager_node"],
-                    creds={"username": splunk_username, "password": splunk_password},
-                )
+    # No new indexes to add
+    if not ansible_indexes:
+        return {"message": "No new indexes to add."}
 
-                if apply_cluster_bundle:
-                    await run_ansible_playbook(
-                        stack_id=stack_id,
-                        playbook_name="apply_cluster_bundle.yml",
-                        limit=stack_metadata["cluster_manager_node"],
-                        creds={
-                            "username": splunk_username,
-                            "password": splunk_password,
-                        },
-                    )
+    # Run a single Ansible playbook call for all indexes
+    ansible_vars = {
+        "indexes": ansible_indexes,
+        "file_path": "/opt/splunk/etc/apps/001_splunk_aem/local/indexes.conf",
+    }
 
-                if stack_metadata.get("shc_cluster", "false").lower() == "true":
-                    ansible_vars["shc_deployer_node"] = stack_details[
-                        "shc_deployer_node"
-                    ]
-                    ansible_vars["shc_members"] = stack_details["shc_members"]
-                    ansible_vars["file_path"] = (
-                        "/opt/splunk/etc/shcluster/apps/001_splunk_aem/local/indexes.conf"
-                    )
-                    await run_ansible_playbook(
-                        stack_id=stack_id,
-                        playbook_name="add_index.yml",
-                        ansible_vars=ansible_vars,
-                        limit=stack_metadata["shc_deployer_node"],
-                        creds={
-                            "username": splunk_username,
-                            "password": splunk_password,
-                        },
-                    )
+    if stack_metadata["enterprise_deployment_type"] == "distributed":
+        ansible_vars["file_path"] = (
+            "/opt/splunk/etc/manager-apps/001_splunk_aem/local/indexes.conf"
+        )
+        await run_ansible_playbook(
+            stack_id=stack_id,
+            playbook_name="batch_add_indexes.yml",
+            ansible_vars=ansible_vars,
+            limit=stack_metadata["cluster_manager_node"],
+            creds={"username": splunk_username, "password": splunk_password},
+        )
 
-                    if apply_shc_bundle:
-                        await run_ansible_playbook(
-                            stack_id=stack_id,
-                            playbook_name="apply_shc_bundle.yml",
-                            ansible_vars=ansible_vars,
-                            limit=stack_metadata["shc_deployer_node"],
-                            creds={
-                                "username": splunk_username,
-                                "password": splunk_password,
-                            },
-                        )
-
-            else:
-                ansible_vars["file_path"] = (
-                    "/opt/splunk/etc/apps/001_splunk_aem/local/indexes.conf"
-                )
-                await run_ansible_playbook(
-                    stack_id=stack_id,
-                    playbook_name="add_index.yml",
-                    ansible_vars=ansible_vars,
-                    limit="all",
-                    creds={"username": splunk_username, "password": splunk_password},
-                )
-
-            created_indexes.append(
-                {"name": name, "maxDataSizeMB": maxDataSizeMB, "datatype": datatype}
+        if apply_cluster_bundle:
+            await run_ansible_playbook(
+                stack_id=stack_id,
+                playbook_name="apply_cluster_bundle.yml",
+                limit=stack_metadata["cluster_manager_node"],
+                creds={"username": splunk_username, "password": splunk_password},
             )
 
-        except Exception as e:
-            failed_indexes.append({"name": name, "error": str(e)})
+        if stack_metadata.get("shc_cluster", "false").lower() == "true":
+            ansible_vars["file_path"] = (
+                "/opt/splunk/etc/shcluster/apps/001_splunk_aem/local/indexes.conf"
+            )
+            await run_ansible_playbook(
+                stack_id=stack_id,
+                playbook_name="batch_add_indexes.yml",
+                ansible_vars=ansible_vars,
+                limit=stack_metadata["shc_deployer_node"],
+                creds={"username": splunk_username, "password": splunk_password},
+            )
+
+            if apply_shc_bundle:
+                await run_ansible_playbook(
+                    stack_id=stack_id,
+                    playbook_name="apply_shc_bundle.yml",
+                    ansible_vars=ansible_vars,
+                    limit=stack_metadata["shc_deployer_node"],
+                    creds={"username": splunk_username, "password": splunk_password},
+                )
+
+    else:
+        await run_ansible_playbook(
+            stack_id=stack_id,
+            playbook_name="batch_add_indexes.yml",
+            ansible_vars=ansible_vars,
+            limit="all",
+            creds={"username": splunk_username, "password": splunk_password},
+        )
 
     # Save the updated indexes to Redis
+    for index in ansible_indexes:
+        existing_indexes[index["name"]] = {
+            "maxDataSizeMB": next(
+                item["value"]
+                for item in index["options"]
+                if item["option"] == "maxDataSizeMB"
+            ),
+            "datatype": next(
+                item["value"]
+                for item in index["options"]
+                if item["option"] == "datatype"
+            ),
+        }
+
     save_indexes(stack_id, existing_indexes)
 
     return {
         "message": "Batch index creation complete.",
-        "created_indexes": created_indexes,
-        "failed_indexes": failed_indexes,
+        "created_indexes": ansible_indexes,
     }
 
 

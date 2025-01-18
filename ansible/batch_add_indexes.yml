@@ -1,0 +1,35 @@
+---
+- name: Add multiple Splunk indexes
+  hosts: all
+  become: yes
+  vars:
+    indexes: [] # List of indexes to create
+    file_path: "" # Path to indexes.conf
+  tasks:
+    - name: Ensure directory exists for indexes.conf
+      file:
+        path: "{{ file_path | dirname }}"
+        state: directory
+        owner: splunk
+        group: splunk
+        mode: "0755"
+
+    - name: Ensure indexes.conf file exists
+      file:
+        path: "{{ file_path }}"
+        state: touch
+        owner: splunk
+        group: splunk
+        mode: "0644"
+
+    - name: Add or update index stanzas
+      ini_file:
+        path: "{{ file_path }}"
+        section: "{{ item.name }}"
+        option: "{{ item.option }}"
+        value: "{{ item.value }}"
+        state: present
+        owner: splunk
+        group: splunk
+        mode: "0644"
+      loop: "{{ indexes | subelements('options') }}"
