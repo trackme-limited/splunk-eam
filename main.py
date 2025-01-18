@@ -1832,12 +1832,12 @@ async def install_splunk_app(
 @app.post("/stacks/{stack_id}/batch_install_apps", summary="Batch install Splunk apps")
 async def batch_install_apps(
     stack_id: str,
-    splunk_username: str = Body(..., embed=True),
-    splunk_password: str = Body(..., embed=True),
-    splunkbase_username: str = Body(..., embed=True),
-    splunkbase_password: str = Body(..., embed=True),
-    apply_shc_bundle: bool = Body(True, embed=True),  # Optional parameter
-    apps: List[Dict[str, str]] = Body(..., embed=True),  # List of apps to install
+    splunk_username: str = Body(...),
+    splunk_password: str = Body(...),
+    splunkbase_username: str = Body(...),
+    splunkbase_password: str = Body(...),
+    apply_shc_bundle: bool = Body(...),  # Optional parameter
+    apps: List[Dict[str, Any]] = Body(...),  # List of apps to install
 ):
     try:
         stack_details = load_stack_from_redis(stack_id)
