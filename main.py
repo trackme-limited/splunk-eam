@@ -6,7 +6,7 @@ from pydantic import BaseModel, ValidationError
 from OpenSSL import crypto
 import asyncio
 import secrets
-from typing import Dict, Optional, List
+from typing import Any, List, Dict, Optional
 import logging
 from logging.handlers import TimedRotatingFileHandler
 import gzip
@@ -1403,7 +1403,7 @@ async def batch_add_indexes(
     stack_id: str,
     splunk_username: str = Body(...),  # Removed embed=True
     splunk_password: str = Body(...),
-    indexes: List[Dict[str, int]] = Body(...),  # Allow int values
+    indexes: List[Dict[str, Any]] = Body(...),
     apply_cluster_bundle: bool = Body(...),
     apply_shc_bundle: bool = Body(...),
 ):
