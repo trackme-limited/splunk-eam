@@ -808,6 +808,108 @@ Add a new index to a stack.
     }'
 ```
 
+#### POST /stacks/{stack_id}/batch_indexes
+
+Add new indexes in batch.
+
+```shell
+    curl -k -X POST https://localhost:8443/stacks/stack_001/batch_indexes \
+    -H "Authorization: Bearer $token" \
+    -H "Content-Type: application/json" \
+    -d '{
+        "splunk_username": "admin",
+        "splunk_password": "password",
+        "apply_cluster_bundle": true,
+        "apply_shc_bundle": true,
+        "indexes": [
+            {
+                "name": "index_1",
+                "maxDataSizeMB": 100000,
+                "datatype": "event"
+            },
+            {
+                "name": "index_2",
+                "maxDataSizeMB": 200000,
+                "datatype": "metric"
+            },
+            {
+                "name": "index_3"
+            }
+        ]
+    }'
+```
+
+Response example:
+
+```json
+    {
+        "message": "Batch index creation complete.",
+        "created_indexes": [
+            {
+                "name": "index_1",
+                "maxDataSizeMB": 100000,
+                "datatype": "event"
+            },
+            {
+                "name": "index_2",
+                "maxDataSizeMB": 200000,
+                "datatype": "metric"
+            },
+            {
+                "name": "index_3",
+                "maxDataSizeMB": 512000,
+                "datatype": "event"
+            }
+        ],
+        "failed_indexes": []
+    }
+```
+
+Response Example (Partial Failure)
+
+```json
+{
+    "message": "Batch index creation complete.",
+    "created_indexes": [
+        {
+            "name": "index_3",
+            "maxDataSizeMB": 512000,
+            "datatype": "event"
+        }
+    ],
+    "failed_indexes": [
+        {
+            "name": "index_1",
+            "error": "Index already exists."
+        },
+        {
+            "name": "index_2",
+            "error": "Invalid datatype. Must be 'event' or 'metric'."
+        }
+    ]
+}
+```
+
+### Request Parameters
+
+| Parameter               | Type    | Required | Description |
+|-------------------------|---------|----------|-------------|
+| `splunk_username`       | string  | ✅ Yes   | Splunk admin username |
+| `splunk_password`       | string  | ✅ Yes   | Splunk admin password |
+| `apply_cluster_bundle`  | boolean | ❌ No    | Apply the cluster bundle after index creation (default: `true`) |
+| `apply_shc_bundle`      | boolean | ❌ No    | Apply the SHC bundle if the stack is a search head cluster (default: `true`) |
+| `indexes`              | array   | ✅ Yes   | List of index objects to be created |
+| `indexes[].name`       | string  | ✅ Yes   | Name of the index |
+| `indexes[].maxDataSizeMB` | int  | ❌ No    | Maximum data size in MB (default: `500000` MB, i.e., 500GB) |
+| `indexes[].datatype`   | string  | ❌ No    | Type of index: `"event"` or `"metric"` (default: `"event"`) |
+
+*Notes*:
+
+- If an index already exists, it will be skipped and returned in failed_indexes.
+- If an invalid datatype is provided, the request will proceed with other indexes while logging the failed ones.
+- The apply_cluster_bundle and apply_shc_bundle options allow automatic bundle application in distributed environments.
+- Works with both standalone and distributed deployments, handling clustered and SHC stacks accordingly.
+
 #### GET /stacks/{stack_id}/indexes
 
 Retrieve all indexes for a stack.
@@ -849,6 +951,49 @@ Install a Splunk app from Splunkbase on a stack.
     "version": "app_version"
     }'
 ```
+
+#### POST /stacks/{stack_id}/batch_install_apps
+
+Installs multiple Splunk apps on a stack in a single API call.
+
+```shell
+    curl -k -X POST https://localhost:8443/stacks/stack_001/batch_install_apps \
+    -H "Authorization: Bearer $token" \
+    -H "Content-Type: application/json" \
+    -d '{
+        "splunk_username": "admin",
+        "splunk_password": "password",
+        "splunkbase_username": "splunk_user",
+        "splunkbase_password": "splunk_pass",
+        "apply_shc_bundle": true,
+        "apps": [
+            {
+                "splunkbase_app_id": "1111",
+                "splunkbase_app_name": "App_One",
+                "version": "1.2.3"
+            },
+            {
+                "splunkbase_app_id": "2222",
+                "splunkbase_app_name": "App_Two",
+                "version": "4.5.6"
+            }
+        ]
+    }'
+```
+
+*Request parameters:*
+
+| Parameter               | Type    | Required | Description |
+|-------------------------|---------|----------|-------------|
+| `splunk_username`       | string  | ✅ Yes   | Splunk admin username |
+| `splunk_password`       | string  | ✅ Yes   | Splunk admin password |
+| `splunkbase_username`   | string  | ✅ Yes   | Splunkbase account username |
+| `splunkbase_password`   | string  | ✅ Yes   | Splunkbase account password |
+| `apply_shc_bundle`      | boolean | ❌ No    | Apply SHC bundle after app installation (default: `true`) |
+| `apps`                 | array   | ✅ Yes   | List of apps to install |
+| `apps[].splunkbase_app_id` | string  | ✅ Yes   | Splunkbase app ID |
+| `apps[].splunkbase_app_name` | string  | ✅ Yes   | Name of the Splunk app |
+| `apps[].version`       | string  | ✅ Yes   | Version of the app to install |
 
 #### DELETE /stacks/{stack_id}/delete_splunk_app
 
