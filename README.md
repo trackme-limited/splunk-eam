@@ -1049,6 +1049,7 @@ Request Parameters:
 | `stack_id`      | String  | ✅ Yes   | The ID of the stack where the index will be added.          |
 | `splunk_username` | String  | ✅ Yes   | Splunk administrator username.                              |
 | `splunk_password` | String  | ✅ Yes   | Splunk administrator password.                              |
+| `splunkd_port`    | `integer` | ❌       | The Splunk management port used to verify startup. (default: 8089) |
 | `name`          | String  | ✅ Yes   | The name of the new index.                                  |
 | `maxDataSizeMB` | Integer | ❌ No    | The maximum data size in MB (default: 500GB in MB).        |
 | `datatype`      | String  | ❌ No    | The type of index: `event` (default) or `metric`.          |
@@ -1153,6 +1154,7 @@ Request Parameters:
 |-------------------------|---------|----------|-------------|
 | `splunk_username`       | string  | ✅ Yes   | Splunk admin username |
 | `splunk_password`       | string  | ✅ Yes   | Splunk admin password |
+| `splunkd_port`    | `integer` | ❌       | The Splunk management port used to verify startup. (default: 8089) |
 | `apply_cluster_bundle`  | boolean | ❌ No    | Apply the cluster bundle after index creation (default: `true`) |
 | `apply_shc_bundle`      | boolean | ❌ No    | Apply the SHC bundle if the stack is a search head cluster (default: `true`) |
 | `indexes`              | array   | ✅ Yes   | List of index objects to be created |
@@ -1198,6 +1200,7 @@ Request Parameters:
 | `index_name`     | String  | ✅ Yes   | The name of the index to be deleted.           |
 | `splunk_username` | String  | ✅ Yes   | Splunk administrator username.                  |
 | `splunk_password` | String  | ✅ Yes   | Splunk administrator password. |
+| `splunkd_port`    | `integer` | ❌       | The Splunk management port used to verify startup. (default: 8089) |
 
 Example response:
 
@@ -1234,6 +1237,7 @@ Request Parameters:
 | `stack_id`          | String  | ✅ Yes   | The ID of the stack where the app will be installed. |
 | `splunk_username`   | String  | ✅ Yes   | Splunk administrator username.                  |
 | `splunk_password`   | String  | ✅ Yes   | Splunk administrator password.                  |
+| `splunkd_port`    | `integer` | ❌       | The Splunk management port used to verify startup. (default: 8089) |
 | `splunkbase_username` | String  | ✅ Yes   | Splunkbase username for downloading the app.   |
 | `splunkbase_password` | String  | ✅ Yes   | Splunkbase password for authentication.        |
 | `splunkbase_app_id`  | String  | ✅ Yes   | The Splunkbase App ID of the app to install.   |
@@ -1287,6 +1291,7 @@ Installs multiple Splunk apps on a stack in a single API call.
 |-------------------------|---------|----------|-------------|
 | `splunk_username`       | string  | ✅ Yes   | Splunk admin username |
 | `splunk_password`       | string  | ✅ Yes   | Splunk admin password |
+| `splunkd_port`    | `integer` | ❌       | The Splunk management port used to verify startup. (default: 8089) |
 | `splunkbase_username`   | string  | ✅ Yes   | Splunkbase account username |
 | `splunkbase_password`   | string  | ✅ Yes   | Splunkbase account password |
 | `apply_shc_bundle`      | boolean | ❌ No    | Apply SHC bundle after app installation (default: `true`) |
@@ -1318,6 +1323,7 @@ Request Parameters:
 | `splunkbase_app_name` | String  | ✅ Yes   | The name of the Splunkbase app to delete.       |
 | `splunk_username`    | String  | ✅ Yes   | Splunk administrator username.                  |
 | `splunk_password`    | String  | ✅ Yes   | Splunk administrator password. |
+| `splunkd_port`    | `integer` | ❌       | The Splunk management port used to verify startup. (default: 8089) |
 
 Example response:
 
@@ -1358,6 +1364,7 @@ Request Parameters:
 | `app_name`       | String  | ✅ Yes   | Name of the private app to install.             |
 | `splunk_username` | String  | ✅ Yes   | Splunk administrator username.                  |
 | `splunk_password` | String  | ✅ Yes   | Splunk administrator password.                  |
+| `splunkd_port`    | `integer` | ❌       | The Splunk management port used to verify startup. (default: 8089) |
 | `target`         | String  | ❌ No    | Target where the app should be installed (`shc` for Search Head Cluster). |
 | `apply_shc_bundle` | Boolean | ❌ No    | Whether to apply the SHC bundle after installation (default: `true`). |
 
@@ -1392,6 +1399,7 @@ Request Parameters:
 | `app_name`       | String  | ✅ Yes   | Name of the private app to delete.              |
 | `splunk_username` | String  | ✅ Yes   | Splunk administrator username.                  |
 | `splunk_password` | String  | ✅ Yes   | Splunk administrator password.                  |
+| `splunkd_port`    | `integer` | ❌       | The Splunk management port used to verify startup. (default: 8089) |
 | `target`         | String  | ❌ No    | Target where the app is installed (`shc` for Search Head Cluster). |
 | `apply_shc_bundle` | Boolean | ❌ No    | Whether to apply the SHC bundle after deletion (default: `true`). |
 
@@ -1484,6 +1492,7 @@ Request Parameters:
 | `stack_id`        | String | ✅ Yes   | The ID of the stack where the SHC rolling restart should be triggered. |
 | `splunk_username` | String | ✅ Yes   | Splunk admin username for authentication. |
 | `splunk_password` | String | ✅ Yes   | Splunk admin password for authentication. |
+| `splunkd_port`    | `integer` | ❌       | The Splunk management port used to verify startup. (default: 8089) |
 
 Example response:
 
@@ -1583,6 +1592,7 @@ Request Parameters:
 | `stack_id`       | String | ✅ Yes   | The ID of the stack where the SHC bundle should be applied. |
 | `splunk_username` | String | ✅ Yes   | Splunk admin username for authentication. |
 | `splunk_password` | String | ✅ Yes   | Splunk admin password for authentication. |
+| `splunkd_port`    | `integer` | ❌       | The Splunk management port used to verify startup. (default: 8089) |
 
 Example response:
 

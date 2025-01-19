@@ -4,7 +4,7 @@
   become: yes
   vars:
     splunk_home: "/opt/splunk"
-    splunk_port: "8089"
+    splunkd_port: "{{ splunkd_port | default(8089) }}"
     shc_members: []
     splunk_username: ""
     splunk_password: ""
@@ -23,12 +23,12 @@
       shell: >
         {{ splunk_home }}/bin/splunk show shcluster-status
         -auth '{{ splunk_username }}:{{ splunk_password }}'
-        -uri https://{{ shc_member }}:{{ splunk_port }}
+        -uri https://{{ shc_member }}:{{ splunkd_port }}
       register: shcluster_status
       when: inventory_hostname == shc_deployer_node
 
     - name: "Wait for SHC service_ready_flag : 1"
-      shell: "{{ splunk_home }}/bin/splunk show shcluster-status -uri https://{{ shc_member }}:{{ splunk_port }} -auth '{{ splunk_username }}:{{ splunk_password }}' | grep service_ready_flag"
+      shell: "{{ splunk_home }}/bin/splunk show shcluster-status -uri https://{{ shc_member }}:{{ splunkd_port }} -auth '{{ splunk_username }}:{{ splunk_password }}' | grep service_ready_flag"
       become_user: splunk
       register: result
       until: result.stdout.find('1') != -1
@@ -38,7 +38,7 @@
     - debug: msg="{{ result.stdout }}"
 
     - name: "Wait for SHC captain conf_replication to reach all members"
-      shell: "{{ splunk_home }}/bin/splunk show shcluster-status -uri https://{{ shc_member }}:{{ splunk_port }} -auth '{{ splunk_username }}:{{ splunk_password }}' | grep last_conf_replication"
+      shell: "{{ splunk_home }}/bin/splunk show shcluster-status -uri https://{{ shc_member }}:{{ splunkd_port }} -auth '{{ splunk_username }}:{{ splunk_password }}' | grep last_conf_replication"
       become_user: splunk
       register: result
       until: result.stdout.find('Pending') == -1
@@ -48,7 +48,7 @@
     - debug: msg="{{ result.stdout }}"
 
     - name: "Wait for SHC kvstore ready status"
-      shell: "{{ splunk_home }}/bin/splunk show kvstore-status -uri https://{{ shc_member }}:{{ splunk_port }} -auth '{{ splunk_username }}:{{ splunk_password }}' | grep status"
+      shell: "{{ splunk_home }}/bin/splunk show kvstore-status -uri https://{{ shc_member }}:{{ splunkd_port }} -auth '{{ splunk_username }}:{{ splunk_password }}' | grep status"
       become_user: splunk
       register: result
       until: result.stdout.find('ready') != -1
@@ -60,7 +60,7 @@
     - name: Trigger SHC Rolling Restart
       shell: >
         {{ splunk_home }}/bin/splunk rolling-restart shcluster-members
-        -uri https://{{ shc_member }}:{{ splunk_port }}
+        -uri https://{{ shc_member }}:{{ splunkd_port }}
         --answer-yes
         -auth '{{ splunk_username }}:{{ splunk_password }}'
       become_user: splunk
