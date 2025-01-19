@@ -3,8 +3,10 @@
   hosts: "{{ shc_deployer_node }}"
   become: yes
   vars:
-    splunk_app_name: ""
-    splunk_home: "/opt/splunk"
+    splunk_home: "{{ splunk_home | default('/opt/splunk') }}"
+    splunkd_port: "{{ splunkd_port | default(8089) }}"
+    splunk_user: "{{ splunk_user | default('splunk') }}"
+    splunk_group: "{{ splunk_group | default('splunk') }}"
 
   tasks:
     - name: Upload app tarball
@@ -27,6 +29,6 @@
       ansible.builtin.file:
         path: "{{ splunk_home }}/etc/shcluster/apps/{{ splunk_app_name }}"
         state: directory
-        owner: splunk
-        group: splunk
+        owner: "{{ splunk_user }}"
+        group: "{{ splunk_group }}"
         recurse: yes

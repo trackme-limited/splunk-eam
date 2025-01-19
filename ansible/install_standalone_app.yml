@@ -3,7 +3,10 @@
   hosts: all
   become: yes
   vars:
-    splunk_home: "/opt/splunk"
+    splunk_home: "{{ splunk_home | default('/opt/splunk') }}"
+    splunkd_port: "{{ splunkd_port | default(8089) }}"
+    splunk_user: "{{ splunk_user | default('splunk') }}"
+    splunk_group: "{{ splunk_group | default('splunk') }}"
     splunk_app_name: ""
     splunk_username: ""
     splunk_password: ""
@@ -41,6 +44,6 @@
       ansible.builtin.file:
         path: "{{ splunk_home }}/etc/apps/{{ splunk_app_name }}"
         state: directory
-        owner: splunk
-        group: splunk
+        owner: "{{ splunk_user }}"
+        group: "{{ splunk_group }}"
         recurse: yes

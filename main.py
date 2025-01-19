@@ -6,7 +6,7 @@ from pydantic import BaseModel, ValidationError
 from OpenSSL import crypto
 import asyncio
 import secrets
-from typing import Dict, Optional, List
+from typing import Any, List, Dict, Optional
 import logging
 from logging.handlers import TimedRotatingFileHandler
 import gzip
@@ -403,6 +403,14 @@ class Stack(BaseModel):
         None  # Optional unless SHC cluster (comma-separated list of members)
     )
     ansible_python_interpreter: str = "/usr/bin/python3"  # Default Python interpreter
+    splunk_home: Optional[str] = (
+        "/opt/splunk"  # splunk_home: optional, defaults to "/opt/splunk"
+    )
+    splunkd_port: Optional[int] = 8089  # splunkd_port: optional, defaults to 8089
+    splunk_user: Optional[str] = "splunk"  # splunk_user: optional, defaults to "splunk"
+    splunk_group: Optional[str] = (
+        "splunk"  # splunk_group: optional, defaults to "splunk"
+    )
 
 
 # Redis-based helper functions
@@ -685,6 +693,13 @@ async def run_ansible_playbook(
                 ansible_vars = {}
             ansible_vars["splunk_username"] = creds["username"]
             ansible_vars["splunk_password"] = creds["password"]
+
+        # Always add splunk_home, splunkd_port, splunk_user, and splunk_group to Ansible vars
+        ansible_vars = ansible_vars or {}
+        ansible_vars["splunk_home"] = stack_metadata.get("splunk_home", "/opt/splunk")
+        ansible_vars["splunkd_port"] = stack_metadata.get("splunkd_port", 8089)
+        ansible_vars["splunk_user"] = stack_metadata.get("splunk_user", "splunk")
+        ansible_vars["splunk_group"] = stack_metadata.get("splunk_group", "splunk")
 
         # Prepare the Ansible playbook command
         playbook_dir = "/app/ansible"
@@ -1397,6 +1412,133 @@ async def add_index(
     }
 
 
+# POST /stacks/{stack_id}/batch_indexes
+@app.post("/stacks/{stack_id}/batch_indexes")
+async def batch_add_indexes(
+    stack_id: str,
+    splunk_username: str = Body(...),
+    splunk_password: str = Body(...),
+    indexes: List[Dict[str, Any]] = Body(...),
+    apply_cluster_bundle: bool = Body(...),
+    apply_shc_bundle: bool = Body(...),
+):
+    """
+    Batch create multiple indexes in a single request.
+    """
+    stack_metadata = redis_client.hgetall(f"stack:{stack_id}:metadata")
+    if not stack_metadata:
+        raise HTTPException(status_code=404, detail="Stack metadata not found.")
+
+    stack_details = load_stack_from_redis(stack_id)
+    existing_indexes = get_indexes(stack_id)
+
+    # Prepare the list of indexes for Ansible
+    ansible_indexes = []
+    for index in indexes:
+        name = index.get("name")
+        maxDataSizeMB = index.get("maxDataSizeMB", 500 * 1024)  # Default 500GB in MB
+        datatype = index.get("datatype", "event")
+
+        # Skip index if it already exists
+        if name in existing_indexes:
+            continue
+
+        # Build structured index object
+        ansible_indexes.append(
+            {
+                "name": name,
+                "options": [
+                    {"option": "maxDataSizeMB", "value": str(maxDataSizeMB)},
+                    {"option": "datatype", "value": datatype},
+                ],
+            }
+        )
+
+    # No new indexes to add
+    if not ansible_indexes:
+        return {"message": "No new indexes to add."}
+
+    # Run a single Ansible playbook call for all indexes
+    ansible_vars = {
+        "indexes": ansible_indexes,
+        "file_path": "/opt/splunk/etc/apps/001_splunk_aem/local/indexes.conf",
+    }
+
+    if stack_metadata["enterprise_deployment_type"] == "distributed":
+        ansible_vars["file_path"] = (
+            "/opt/splunk/etc/manager-apps/001_splunk_aem/local/indexes.conf"
+        )
+        await run_ansible_playbook(
+            stack_id=stack_id,
+            playbook_name="batch_add_indexes.yml",
+            ansible_vars=ansible_vars,
+            limit=stack_metadata["cluster_manager_node"],
+            creds={"username": splunk_username, "password": splunk_password},
+        )
+
+        if apply_cluster_bundle:
+            await run_ansible_playbook(
+                stack_id=stack_id,
+                playbook_name="apply_cluster_bundle.yml",
+                limit=stack_metadata["cluster_manager_node"],
+                creds={"username": splunk_username, "password": splunk_password},
+            )
+
+        if stack_metadata.get("shc_cluster", "false").lower() == "true":
+            ansible_vars["shc_deployer_node"] = stack_details["shc_deployer_node"]
+            ansible_vars["shc_members"] = stack_details["shc_members"]
+            ansible_vars["file_path"] = (
+                "/opt/splunk/etc/shcluster/apps/001_splunk_aem/local/indexes.conf"
+            )
+            await run_ansible_playbook(
+                stack_id=stack_id,
+                playbook_name="batch_add_indexes.yml",
+                ansible_vars=ansible_vars,
+                limit=stack_metadata["shc_deployer_node"],
+                creds={"username": splunk_username, "password": splunk_password},
+            )
+
+            if apply_shc_bundle:
+                await run_ansible_playbook(
+                    stack_id=stack_id,
+                    playbook_name="apply_shc_bundle.yml",
+                    ansible_vars=ansible_vars,
+                    limit=stack_metadata["shc_deployer_node"],
+                    creds={"username": splunk_username, "password": splunk_password},
+                )
+
+    else:
+        await run_ansible_playbook(
+            stack_id=stack_id,
+            playbook_name="batch_add_indexes.yml",
+            ansible_vars=ansible_vars,
+            limit="all",
+            creds={"username": splunk_username, "password": splunk_password},
+        )
+
+    # Save the updated indexes to Redis
+    for index in ansible_indexes:
+        existing_indexes[index["name"]] = {
+            "maxDataSizeMB": next(
+                item["value"]
+                for item in index["options"]
+                if item["option"] == "maxDataSizeMB"
+            ),
+            "datatype": next(
+                item["value"]
+                for item in index["options"]
+                if item["option"] == "datatype"
+            ),
+        }
+
+    save_indexes(stack_id, existing_indexes)
+
+    return {
+        "message": "Batch index creation complete.",
+        "created_indexes": ansible_indexes,
+    }
+
+
 # DELETE /stacks/{stack_id}/indexes/{index_name}
 @app.delete("/stacks/{stack_id}/indexes/{index_name}")
 async def delete_index_endpoint(
@@ -1486,7 +1628,7 @@ async def delete_index_endpoint(
                     await run_ansible_playbook(
                         stack_id=stack_id,
                         playbook_name="apply_shc_bundle.yml",
-                        ansible_vars={},
+                        ansible_vars=ansible_vars,
                         limit=stack_metadata["shc_deployer_node"],
                         creds={
                             "username": splunk_username,
@@ -1701,6 +1843,110 @@ async def install_splunk_app(
         error_message = f'Error installing app "{splunkbase_app_name}": {str(e)}'
         logger.error(error_message)
         raise HTTPException(status_code=500, detail=error_message)
+
+
+# POST /stacks/{stack_id}/batch_install_apps
+@app.post("/stacks/{stack_id}/batch_install_apps", summary="Batch install Splunk apps")
+async def batch_install_apps(
+    stack_id: str,
+    splunk_username: str = Body(...),
+    splunk_password: str = Body(...),
+    splunkbase_username: str = Body(...),
+    splunkbase_password: str = Body(...),
+    apply_shc_bundle: bool = Body(...),  # Optional parameter
+    apps: List[Dict[str, Any]] = Body(...),  # List of apps to install
+):
+    try:
+        stack_details = load_stack_from_redis(stack_id)
+        installed_apps = redis_client.hgetall(f"stack:{stack_id}:apps")
+        installed_apps = {
+            app_name: json.loads(app_details)
+            for app_name, app_details in installed_apps.items()
+        }
+
+        session_id = login_splunkbase(
+            splunkbase_username, splunkbase_password, proxy_dict={}
+        )
+        files_dir = "/app/data/splunk_apps"
+        os.makedirs(files_dir, exist_ok=True)
+
+        results = []
+
+        for app in apps:
+            app_id = app["splunkbase_app_id"]
+            app_name = app["splunkbase_app_name"]
+            version = app["version"]
+
+            if (
+                app_name in installed_apps
+                and installed_apps[app_name]["version"] == version
+            ):
+                results.append(
+                    {
+                        "app_name": app_name,
+                        "message": f"Already installed (version {version})",
+                    }
+                )
+                continue
+
+            app_tar_path = os.path.join(files_dir, f"{app_name}_{version}.tgz")
+
+            if not os.path.exists(app_tar_path):
+                download_splunk_app(session_id, app_id, version, app_tar_path)
+
+            ansible_files_dir = "/app/ansible/files"
+            os.makedirs(ansible_files_dir, exist_ok=True)
+            ansible_tar_path = os.path.join(ansible_files_dir, f"{app_name}.tgz")
+            shutil.copy(app_tar_path, ansible_tar_path)
+
+            playbook = (
+                "install_standalone_app.yml"
+                if stack_details["enterprise_deployment_type"] == "standalone"
+                else "install_shc_app.yml"
+            )
+
+            ansible_vars = {"splunk_app_name": app_name}
+            if stack_details["enterprise_deployment_type"] != "standalone":
+                ansible_vars.update(
+                    {"shc_deployer_node": stack_details["shc_deployer_node"]}
+                )
+
+            await run_ansible_playbook(
+                stack_id,
+                playbook,
+                ansible_vars=ansible_vars,
+                creds={"username": splunk_username, "password": splunk_password},
+            )
+
+            redis_client.hset(
+                f"stack:{stack_id}:apps",
+                app_name,
+                json.dumps({"id": app_id, "version": version}),
+            )
+
+            results.append({"app_name": app_name, "message": "Installed successfully"})
+
+        if (
+            stack_details["enterprise_deployment_type"] != "standalone"
+            and apply_shc_bundle
+        ):
+            ansible_vars = {
+                "shc_deployer_node": stack_details["shc_deployer_node"],
+                "shc_members": stack_details["shc_members"],
+            }
+            await run_ansible_playbook(
+                stack_id,
+                "apply_shc_bundle.yml",
+                ansible_vars=ansible_vars,
+                limit=stack_details["shc_deployer_node"],
+                creds={"username": splunk_username, "password": splunk_password},
+            )
+
+        return {"message": "Batch app installation completed", "results": results}
+
+    except Exception as e:
+        logger.error(f"Batch install error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Batch install failed: {str(e)}")
 
 
 """
@@ -2103,6 +2349,9 @@ HTTP Method: POST
 async def restart_splunk(
     stack_id: str,
     limit: Optional[str] = Body(None, embed=True),  # Optional limit parameter
+    splunk_service_name: Optional[str] = Body(
+        "splunk", embed=True
+    ),  # Default to splunk
 ):
 
     # Retrieve stack details from Redis
@@ -2116,7 +2365,9 @@ async def restart_splunk(
         )
 
     # Prepare Ansible variables
-    ansible_vars = {}
+    ansible_vars = {
+        "splunk_service_name": splunk_service_name,
+    }
 
     # Parse and validate the limit parameter
     limit_hosts = None

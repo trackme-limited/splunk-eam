@@ -1,5 +1,5 @@
 ---
-- name: Set HTTP Max Content Length for SHC members
+- name: Add multiple Splunk indexes
   hosts: all
   become: yes
   vars:
@@ -7,10 +7,10 @@
     splunkd_port: "{{ splunkd_port | default(8089) }}"
     splunk_user: "{{ splunk_user | default('splunk') }}"
     splunk_group: "{{ splunk_group | default('splunk') }}"
-    http_max_content_length: 5000000000 # Default to 5GB
-    file_path: "{{ splunk_home }}/etc/system/local/server.conf"
+    indexes: [] # List of indexes to create
+    file_path: "" # Path to indexes.conf
   tasks:
-    - name: Ensure directory exists for server.conf
+    - name: Ensure directory exists for indexes.conf
       file:
         path: "{{ file_path | dirname }}"
         state: directory
@@ -18,7 +18,7 @@
         group: "{{ splunk_group }}"
         mode: "0755"
 
-    - name: Ensure server.conf file exists
+    - name: Ensure indexes.conf file exists
       file:
         path: "{{ file_path }}"
         state: touch
@@ -26,13 +26,16 @@
         group: "{{ splunk_group }}"
         mode: "0644"
 
-    - name: Set HTTP Max Content Length in server.conf
+    - name: Add or update index stanzas
       ini_file:
         path: "{{ file_path }}"
-        section: "httpServer"
-        option: "max_content_length"
-        value: "{{ http_max_content_length }}"
+        section: "{{ item.0.name }}" # Ensure correct reference to the index name
+        option: "{{ item.1.option }}" # Extract individual option
+        value: "{{ item.1.value }}" # Extract value
         state: present
         owner: "{{ splunk_user }}"
         group: "{{ splunk_group }}"
         mode: "0644"
+      loop: "{{ indexes | subelements('options') }}"
+      loop_control:
+        label: "Index: {{ item.0.name }} | Option: {{ item.1.option }} = {{ item.1.value }}"
