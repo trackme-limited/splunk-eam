@@ -2334,6 +2334,10 @@ HTTP Method: POST
 async def restart_splunk(
     stack_id: str,
     limit: Optional[str] = Body(None, embed=True),  # Optional limit parameter
+    splunkd_port: Optional[int] = Body(8089, embed=True),  # Default to 8089
+    splunk_service_name: Optional[str] = Body(
+        "splunk", embed=True
+    ),  # Default to splunk
 ):
 
     # Retrieve stack details from Redis
@@ -2347,7 +2351,10 @@ async def restart_splunk(
         )
 
     # Prepare Ansible variables
-    ansible_vars = {}
+    ansible_vars = {
+        "splunk_service_name": splunk_service_name,
+        "splunkd_port": splunkd_port,
+    }
 
     # Parse and validate the limit parameter
     limit_hosts = None

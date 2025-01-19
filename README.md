@@ -1418,10 +1418,12 @@ Restart Splunk services on a stack.
 
 Request Parameters:
 
-| Parameter  | Type    | Required | Description |
-|------------|---------|----------|-------------|
-| `stack_id` | String  | ✅ Yes   | The ID of the stack where Splunk services should be restarted. |
-| `limit`    | String  | ❌ No    | (Optional) Limit the restart to specific hosts in a distributed deployment. |
+| Parameter            | Type     | Required | Default  | Description |
+|----------------------|----------|----------|----------|-------------|
+| `stack_id`          | `string`  | ✅       | N/A      | The ID of the stack where Splunk services should be restarted. |
+| `limit`             | `string`  | ❌       | `None`   | Comma-separated list of hosts to restart Splunk on. Required for distributed deployments. |
+| `splunkd_port`      | `integer` | ❌       | `8089`   | The Splunk management port used to verify startup. |
+| `splunk_service_name` | `string` | ❌       | `splunk` | The name of the Splunk service to restart. |
 
 Example response:
 
