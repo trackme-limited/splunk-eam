@@ -516,7 +516,7 @@ Finally, push the SSH private key to the stack endpoint:
 
 You can test the Ansible connectivity to the stack by running the following command:
 
-*Example for our distributed environment*
+*Example for our distributed environment
 
 ```shell
     curl -k -H "Authorization: Bearer $token" -X POST "https://localhost:8443/stacks/prd1-cluster/ansible_test"
@@ -691,6 +691,22 @@ Create a bearer token for authentication.
     }'
 ```
 
+Request Parameters:
+
+| Parameter  | Type   | Required | Description |
+|------------|--------|----------|-------------|
+| `username` | String | ✅ Yes   | The admin username for authentication. |
+| `password` | String | ✅ Yes   | The admin password for authentication. |
+
+Example Response:
+
+```json
+    {
+        "access_token": "eyJhbGciOiJIUzI1...",
+        "token_type": "bearer"
+    }
+```
+
 #### POST /delete_token
 
 Revoke an existing bearer token.
@@ -701,6 +717,20 @@ Revoke an existing bearer token.
     -d '{
     "token": "your_token"
     }'
+```
+
+Request Parameters:
+
+| Parameter  | Type   | Required | Description |
+|------------|--------|----------|-------------|
+| `token`    | String | ✅ Yes   | The bearer token to be revoked. |
+
+Example response:
+
+```json
+    {
+        "message": "Token revoked successfully"
+    }
 ```
 
 #### POST /update_password
@@ -716,6 +746,21 @@ Update the admin password.
     }'
 ```
 
+Request Parameters:
+
+| Parameter          | Type   | Required | Description                      |
+|--------------------|--------|----------|----------------------------------|
+| `current_password` | String | ✅ Yes   | The current admin password.      |
+| `new_password`     | String | ✅ Yes   | The new password to be set.      |
+
+Example response:
+
+```json
+    {
+        "message": "Admin password updated successfully"
+    }
+```
+
 #### POST /stacks
 
 Create a new stack.
@@ -729,6 +774,30 @@ Create a new stack.
     "enterprise_deployment_type": "standalone",
     "shc_cluster": false
     }'
+```
+
+Request Parameters:
+
+| Parameter                    | Type    | Required | Description                                                                 |
+|------------------------------|---------|----------|-----------------------------------------------------------------------------|
+| `stack_id`                   | String  | ✅ Yes   | Unique identifier for the stack.                                            |
+| `enterprise_deployment_type` | String  | ✅ Yes   | Deployment type: `"standalone"` or `"distributed"`.                         |
+| `shc_cluster`                | Boolean | ❌ No    | Whether the stack is an SHC cluster (`true` or `false`). Default is `false`. |
+| `cluster_manager_node`        | String  | ❌ No    | Required if `enterprise_deployment_type` is `"distributed"`.                |
+| `shc_deployer_node`          | String  | ❌ No    | Required if `shc_cluster` is `true`.                                        |
+| `shc_members`                | String  | ❌ No    | Comma-separated list of SHC members if `shc_cluster` is `true`.             |
+
+Example response:
+
+```json
+    {
+        "message": "Stack 'stack_001' created successfully.",
+        "stack": {
+            "stack_id": "stack_001",
+            "enterprise_deployment_type": "standalone",
+            "shc_cluster": false
+        }
+    }
 ```
 
 #### GET /stacks
@@ -758,6 +827,20 @@ Delete a specific stack.
     -H "Authorization: Bearer $token"
 ```
 
+Request Parameters:
+
+| Parameter   | Type   | Required | Description |
+|------------|--------|----------|-------------|
+| `stack_id` | String | ✅ Yes   | The ID of the stack to be deleted. |
+
+Example response:
+
+```json
+{
+    "message": "Stack 'stack_001' deleted successfully."
+}
+```
+
 #### POST /stacks/{stack_id}/inventory
 
 Upload the Ansible inventory for a stack.
@@ -767,6 +850,41 @@ Upload the Ansible inventory for a stack.
     -H "Authorization: Bearer $token" \
     -H "Content-Type: application/json" \
     -d @inventory.json
+```
+
+Request Parameters:
+
+| Parameter    | Type   | Required | Description                                         |
+|-------------|--------|----------|-----------------------------------------------------|
+| `stack_id`  | String | ✅ Yes   | The ID of the stack where the inventory is stored. |
+| `inventory` | Object | ✅ Yes   | The Ansible inventory in JSON format.
+
+Example inventory.json:
+
+```json
+    {
+        "splunk_servers": {
+            "hosts": {
+                "splunk1.example.com": {
+                    "ansible_host": "192.168.1.10",
+                    "ansible_user": "ubuntu"
+                },
+                "splunk2.example.com": {
+                    "ansible_host": "192.168.1.11",
+                    "ansible_user": "ubuntu"
+                }
+            }
+        }
+    }
+```
+
+Example response:
+
+```json
+    {
+        "message": "Inventory for stack 'stack_001' saved successfully",
+        "stack_id": "stack_001"
+    }
 ```
 
 #### GET /stacks/{stack_id}/inventory
@@ -791,6 +909,30 @@ Upload the SSH private key for a stack.
     }'
 ```
 
+Request Parameters:
+
+| Parameter     | Type   | Required | Description                                         |
+|--------------|--------|----------|-----------------------------------------------------|
+| `stack_id`   | String | ✅ Yes   | The ID of the stack where the SSH key is stored.   |
+| `ssh_key_b64` | String | ✅ Yes   | The private SSH key encoded in Base64 format.     |
+
+Example of Base64 Encoding an SSH Key
+
+*To convert an SSH key to Base64:
+
+```shell
+cat id_rsa | base64
+```
+
+Example Response:
+
+```json
+{
+    "message": "SSH key for stack 'stack_001' saved successfully",
+    "path": "/data/stack_001/ssh_private"
+}
+```
+
 #### POST /stacks/{stack_id}/indexes
 
 Add a new index to a stack.
@@ -806,6 +948,29 @@ Add a new index to a stack.
     "maxDataSizeMB": 500000,
     "datatype": "event"
     }'
+```
+
+Request Parameters:
+
+| Parameter        | Type    | Required | Description                                                  |
+|-----------------|---------|----------|--------------------------------------------------------------|
+| `stack_id`      | String  | ✅ Yes   | The ID of the stack where the index will be added.          |
+| `splunk_username` | String  | ✅ Yes   | Splunk administrator username.                              |
+| `splunk_password` | String  | ✅ Yes   | Splunk administrator password.                              |
+| `name`          | String  | ✅ Yes   | The name of the new index.                                  |
+| `maxDataSizeMB` | Integer | ❌ No    | The maximum data size in MB (default: 500GB in MB).        |
+| `datatype`      | String  | ❌ No    | The type of index: `event` (default) or `metric`.          |
+
+Example response:
+
+```json
+    {
+        "message": "Index added successfully, for distributed stacks, push the bundle to reflect this new configuration, on standalone stacks, ensure to restart Splunk.",
+        "index": {
+            "maxDataSizeMB": 500000,
+            "datatype": "event"
+        }
+    }
 ```
 
 #### POST /stacks/{stack_id}/batch_indexes
@@ -890,7 +1055,7 @@ Response Example (Partial Failure)
 }
 ```
 
-### Request Parameters
+Request Parameters:
 
 | Parameter               | Type    | Required | Description |
 |-------------------------|---------|----------|-------------|
@@ -933,6 +1098,24 @@ Delete an index from a stack.
     }'
 ```
 
+Request Parameters:
+
+| Parameter         | Type    | Required | Description                                      |
+|------------------|---------|----------|--------------------------------------------------|
+| `stack_id`       | String  | ✅ Yes   | The ID of the stack from which to delete the index. |
+| `index_name`     | String  | ✅ Yes   | The name of the index to be deleted.           |
+| `splunk_username` | String  | ✅ Yes   | Splunk administrator username.                  |
+| `splunk_password` | String  | ✅ Yes   | Splunk administrator password. |
+
+Example response:
+
+```json
+{
+    "message": "Index 'index_name' deleted successfully. For this change to take effect, ensure to push the bundles for distributed environments or restart Splunk for standalone.",
+    "index": "index_name"
+}
+```
+
 #### POST /stacks/{stack_id}/install_splunk_app
 
 Install a Splunk app from Splunkbase on a stack.
@@ -950,6 +1133,31 @@ Install a Splunk app from Splunkbase on a stack.
     "splunkbase_app_name": "app_name",
     "version": "app_version"
     }'
+```
+
+Request Parameters:
+
+| Parameter            | Type    | Required | Description                                      |
+|----------------------|---------|----------|--------------------------------------------------|
+| `stack_id`          | String  | ✅ Yes   | The ID of the stack where the app will be installed. |
+| `splunk_username`   | String  | ✅ Yes   | Splunk administrator username.                  |
+| `splunk_password`   | String  | ✅ Yes   | Splunk administrator password.                  |
+| `splunkbase_username` | String  | ✅ Yes   | Splunkbase username for downloading the app.   |
+| `splunkbase_password` | String  | ✅ Yes   | Splunkbase password for authentication.        |
+| `splunkbase_app_id`  | String  | ✅ Yes   | The Splunkbase App ID of the app to install.   |
+| `splunkbase_app_name` | String  | ✅ Yes   | The name of the Splunkbase app.                |
+| `version`           | String  | ✅ Yes   | The version of the app to install.             |
+
+Example response:
+
+```json
+    {
+        "message": "App installed successfully",
+        "app_details": {
+            "id": "app_id",
+            "version": "app_version"
+        }
+    }
 ```
 
 #### POST /stacks/{stack_id}/batch_install_apps
@@ -1010,6 +1218,29 @@ Delete a Splunk app from a stack.
     }'
 ```
 
+Request Parameters:
+
+| Parameter             | Type    | Required | Description                                      |
+|-----------------------|---------|----------|--------------------------------------------------|
+| `stack_id`           | String  | ✅ Yes   | The ID of the stack where the app is installed. |
+| `splunkbase_app_name` | String  | ✅ Yes   | The name of the Splunkbase app to delete.       |
+| `splunk_username`    | String  | ✅ Yes   | Splunk administrator username.                  |
+| `splunk_password`    | String  | ✅ Yes   | Splunk administrator password. |
+
+Example response:
+
+```json
+    {
+        "message": "App 'app_name' deleted successfully.",
+        "remaining_apps": {
+            "another_app": {
+                "id": "1234",
+                "version": "2.0.0"
+            }
+        }
+    }
+```
+
 #### POST /stacks/{stack_id}/install_private_app
 
 Install a private Splunk app on a stack.
@@ -1024,6 +1255,26 @@ Install a private Splunk app on a stack.
     "splunk_username": "admin",
     "splunk_password": "password"
     }'
+```
+
+Request Parameters:
+
+| Parameter         | Type    | Required | Description                                      |
+|-------------------|---------|----------|--------------------------------------------------|
+| `stack_id`       | String  | ✅ Yes   | The ID of the stack where the app will be installed. |
+| `app_base64`     | String  | ✅ Yes   | Base64-encoded tarball of the private app.      |
+| `app_name`       | String  | ✅ Yes   | Name of the private app to install.             |
+| `splunk_username` | String  | ✅ Yes   | Splunk administrator username.                  |
+| `splunk_password` | String  | ✅ Yes   | Splunk administrator password.                  |
+| `target`         | String  | ❌ No    | Target where the app should be installed (`shc` for Search Head Cluster). |
+| `apply_shc_bundle` | Boolean | ❌ No    | Whether to apply the SHC bundle after installation (default: `true`). |
+
+Example response;
+
+```json
+    {
+        "message": "Private app 'private_app_name' installed successfully."
+    }
 ```
 
 #### DELETE /stacks/{stack_id}/delete_private_app
@@ -1041,6 +1292,25 @@ Delete a private Splunk app from a stack.
     }'
 ```
 
+Request Parameters:
+
+| Parameter         | Type    | Required | Description                                      |
+|-------------------|---------|----------|--------------------------------------------------|
+| `stack_id`       | String  | ✅ Yes   | The ID of the stack where the app should be removed. |
+| `app_name`       | String  | ✅ Yes   | Name of the private app to delete.              |
+| `splunk_username` | String  | ✅ Yes   | Splunk administrator username.                  |
+| `splunk_password` | String  | ✅ Yes   | Splunk administrator password.                  |
+| `target`         | String  | ❌ No    | Target where the app is installed (`shc` for Search Head Cluster). |
+| `apply_shc_bundle` | Boolean | ❌ No    | Whether to apply the SHC bundle after deletion (default: `true`). |
+
+Example response:
+
+```json
+    {
+        "message": "Private app 'private_app_name' removed successfully."
+    }
+```
+
 #### POST /stacks/{stack_id}/restart_splunk
 
 Restart Splunk services on a stack.
@@ -1052,6 +1322,21 @@ Restart Splunk services on a stack.
     -d '{
     "limit": "optional_limit_parameter"
     }'
+```
+
+Request Parameters:
+
+| Parameter  | Type    | Required | Description |
+|------------|---------|----------|-------------|
+| `stack_id` | String  | ✅ Yes   | The ID of the stack where Splunk services should be restarted. |
+| `limit`    | String  | ❌ No    | (Optional) Limit the restart to specific hosts in a distributed deployment. |
+
+Example response:
+
+```json
+    {
+        "message": "Splunk Restart triggered successfully."
+    }
 ```
 
 #### POST /stacks/{stack_id}/cluster_rolling_restart
@@ -1068,6 +1353,22 @@ Trigger a rolling restart of an indexer cluster.
     }'
 ```
 
+Request Parameters:
+
+| Parameter          | Type   | Required | Description |
+|--------------------|--------|----------|-------------|
+| `stack_id`        | String | ✅ Yes   | The ID of the stack where the rolling restart should be triggered. |
+| `splunk_username` | String | ✅ Yes   | Splunk admin username for authentication. |
+| `splunk_password` | String | ✅ Yes   | Splunk admin password for authentication. |
+
+Example response:
+
+```json
+    {
+        "message": "Indexer Cluster Rolling Restart triggered successfully."
+    }
+```
+
 #### POST /stacks/{stack_id}/shc_rolling_restart
 
 Trigger a rolling restart of a Search Head Cluster (SHC).
@@ -1082,6 +1383,22 @@ Trigger a rolling restart of a Search Head Cluster (SHC).
     }'
 ```
 
+Request Parameters:
+
+| Parameter          | Type   | Required | Description |
+|--------------------|--------|----------|-------------|
+| `stack_id`        | String | ✅ Yes   | The ID of the stack where the SHC rolling restart should be triggered. |
+| `splunk_username` | String | ✅ Yes   | Splunk admin username for authentication. |
+| `splunk_password` | String | ✅ Yes   | Splunk admin password for authentication. |
+
+Example response:
+
+```json
+    {
+        "message": "SHC Rolling Restart triggered successfully"
+    }
+```
+
 #### POST /stacks/{stack_id}/ansible_test
 
 Test the Ansible connection to the hosts in a stack.
@@ -1089,6 +1406,36 @@ Test the Ansible connection to the hosts in a stack.
 ```shell
     curl -k -X POST https://localhost:8443/stacks/stack_001/ansible_test \
     -H "Authorization: Bearer $token"
+```
+
+Request Parameters:
+
+| Parameter   | Type   | Required | Description |
+|------------|--------|----------|-------------|
+| `stack_id` | String | ✅ Yes   | The ID of the stack to test Ansible connectivity. |
+
+Example response:
+
+```json
+    {
+        "message": "Ansible ping test successful",
+        "results": [
+            {
+                "host": "host1.example.com",
+                "details": {
+                    "changed": false,
+                    "ping": "pong"
+                }
+            },
+            {
+                "host": "host2.example.com",
+                "details": {
+                    "changed": false,
+                    "ping": "pong"
+                }
+            }
+        ]
+    }
 ```
 
 #### POST /stacks/{stack_id}/apply_cluster_bundle
@@ -1105,6 +1452,22 @@ Apply a cluster bundle on a distributed cluster manager.
     }'
 ```
 
+Request Parameters:
+
+| Parameter        | Type   | Required | Description |
+|-----------------|--------|----------|-------------|
+| `stack_id`      | String | ✅ Yes   | The ID of the stack where the cluster bundle should be applied. |
+| `splunk_username` | String | ✅ Yes   | Splunk admin username for authentication. |
+| `splunk_password` | String | ✅ Yes   | Splunk admin password for authentication. |
+
+Example response:
+
+```json
+    {
+        "message": "Cluster bundle applied successfully."
+    }
+```
+
 #### POST /stacks/{stack_id}/apply_shc_bundle
 
 Apply an SHC bundle on a deployer node for a Search Head Cluster (SHC).
@@ -1117,6 +1480,22 @@ Apply an SHC bundle on a deployer node for a Search Head Cluster (SHC).
     "splunk_username": "admin",
     "splunk_password": "password"
     }'
+```
+
+Request Parameters:
+
+| Parameter         | Type   | Required | Description |
+|------------------|--------|----------|-------------|
+| `stack_id`       | String | ✅ Yes   | The ID of the stack where the SHC bundle should be applied. |
+| `splunk_username` | String | ✅ Yes   | Splunk admin username for authentication. |
+| `splunk_password` | String | ✅ Yes   | Splunk admin password for authentication. |
+
+Example response:
+
+```json
+    {
+        "message": "SHC bundle applied successfully."
+    }
 ```
 
 #### POST /stacks/{stack_id}/shc_set_http_max_content
@@ -1132,4 +1511,21 @@ curl -k -X POST https://localhost:8443/stacks/stack_001/shc_set_http_max_content
     "splunk_password": "password",
     "http_max_content_length": 5000000000
 }'
+```
+
+Request Parameters:
+
+| Parameter                 | Type    | Required | Description |
+|---------------------------|---------|----------|-------------|
+| `stack_id`               | String  | ✅ Yes   | The ID of the stack where the HTTP Max Content Length should be set. |
+| `splunk_username`        | String  | ✅ Yes   | Splunk admin username for authentication. |
+| `splunk_password`        | String  | ✅ Yes   | Splunk admin password for authentication. |
+| `http_max_content_length` | Integer | ❌ No   | The HTTP max content length in bytes (default: `5000000000` → **5GB**). |
+
+Response example:
+
+```json
+    {
+        "message": "HTTP Max Content Length set successfully in server.conf. Please achieve a rolling restart now."
+    }
 ```
