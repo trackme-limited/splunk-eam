@@ -817,10 +817,10 @@ Request Parameters:
 | `cluster_manager_node`        | String  | ❌ No    | Required if `enterprise_deployment_type` is `"distributed"`.                |
 | `shc_deployer_node`          | String  | ❌ No    | Required if `shc_cluster` is `true`.                                        |
 | `shc_members`                | String  | ❌ No    | Comma-separated list of SHC members if `shc_cluster` is `true`.             |
-| `splunk_home`    | String | ❌       | The Splunk homep. (default: /opt/splunk) |
-| `splunkd_port`    | Integer | ❌       | The Splunk management port used to verify startup. (default: 8089) |
-| `splunk_user`    | String | ❌       | The Unix user name for splunk. (default: splunk) |
-| `splunk_group`    | String | ❌       | The Unix group name for splunk. (default: splunk) |
+| `splunk_home`    | String | ❌ No       | The Splunk homep. (default: /opt/splunk) |
+| `splunkd_port`    | Integer | ❌ No       | The Splunk management port used to verify startup. (default: 8089) |
+| `splunk_user`    | String | ❌ No       | The Unix user name for splunk. (default: splunk) |
+| `splunk_group`    | String | ❌ No       | The Unix group name for splunk. (default: splunk) |
 
 Example response:
 
