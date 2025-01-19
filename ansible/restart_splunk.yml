@@ -3,8 +3,11 @@
   hosts: all
   become: yes
   vars:
-    splunk_service_name: "{{ splunk_service_name | default('splunk') }}"
+    splunk_home: "{{ splunk_home | default('/opt/splunk') }}"
     splunkd_port: "{{ splunkd_port | default(8089) }}"
+    splunk_user: "{{ splunk_user | default('splunk') }}"
+    splunk_group: "{{ splunk_group | default('splunk') }}"
+    splunk_service_name: "{{ splunk_service_name | default('splunk') }}"
   tasks:
     - name: Restart the Splunk service
       systemd:

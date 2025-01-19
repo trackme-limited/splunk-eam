@@ -403,6 +403,14 @@ class Stack(BaseModel):
         None  # Optional unless SHC cluster (comma-separated list of members)
     )
     ansible_python_interpreter: str = "/usr/bin/python3"  # Default Python interpreter
+    splunk_home: Optional[str] = (
+        "/opt/splunk"  # splunk_home: optional, defaults to "/opt/splunk"
+    )
+    splunkd_port: Optional[int] = 8089  # splunkd_port: optional, defaults to 8089
+    splunk_user: Optional[str] = "splunk"  # splunk_user: optional, defaults to "splunk"
+    splunk_group: Optional[str] = (
+        "splunk"  # splunk_group: optional, defaults to "splunk"
+    )
 
 
 # Redis-based helper functions
@@ -685,6 +693,13 @@ async def run_ansible_playbook(
                 ansible_vars = {}
             ansible_vars["splunk_username"] = creds["username"]
             ansible_vars["splunk_password"] = creds["password"]
+
+        # Always add splunk_home, splunkd_port, splunk_user, and splunk_group to Ansible vars
+        ansible_vars = ansible_vars or {}
+        ansible_vars["splunk_home"] = stack_metadata.get("splunk_home", "/opt/splunk")
+        ansible_vars["splunkd_port"] = stack_metadata.get("splunkd_port", 8089)
+        ansible_vars["splunk_user"] = stack_metadata.get("splunk_user", "splunk")
+        ansible_vars["splunk_group"] = stack_metadata.get("splunk_group", "splunk")
 
         # Prepare the Ansible playbook command
         playbook_dir = "/app/ansible"
@@ -1289,7 +1304,6 @@ async def add_index(
     stack_id: str,
     splunk_username: str = Body(..., embed=True),
     splunk_password: str = Body(..., embed=True),
-    splunkd_port: Optional[int] = Body(8089, embed=True),  # Default to 8089
     name: str = Body(..., embed=True),
     maxDataSizeMB: int = Body(None, embed=True),
     datatype: str = Body(None, embed=True),
@@ -1368,8 +1382,6 @@ async def add_index(
 
             # Apply SHC bundle if enabled
             if apply_shc_bundle:
-                # Set splunkd port
-                ansible_vars["splunkd_port"] = splunkd_port
                 await run_ansible_playbook(
                     stack_id=stack_id,
                     playbook_name="apply_shc_bundle.yml",
@@ -1406,7 +1418,6 @@ async def batch_add_indexes(
     stack_id: str,
     splunk_username: str = Body(...),
     splunk_password: str = Body(...),
-    splunkd_port: Optional[int] = Body(8089, embed=True),  # Default to 8089
     indexes: List[Dict[str, Any]] = Body(...),
     apply_cluster_bundle: bool = Body(...),
     apply_shc_bundle: bool = Body(...),
@@ -1488,8 +1499,6 @@ async def batch_add_indexes(
             )
 
             if apply_shc_bundle:
-                # Set splunkd port
-                ansible_vars["splunkd_port"] = splunkd_port
                 await run_ansible_playbook(
                     stack_id=stack_id,
                     playbook_name="apply_shc_bundle.yml",
@@ -1537,7 +1546,6 @@ async def delete_index_endpoint(
     index_name: str,
     splunk_username: str = Query(..., description="Splunk admin username"),
     splunk_password: str = Query(..., description="Splunk admin password"),
-    splunkd_port: Optional[int] = Body(8089, embed=True),  # Default to 8089
     apply_cluster_bundle: bool = Query(True, description="Apply cluster bundle"),
     apply_shc_bundle: bool = Query(True, description="Apply SHC bundle"),
 ):
@@ -1617,8 +1625,6 @@ async def delete_index_endpoint(
 
                 # Apply SHC bundle if requested
                 if apply_shc_bundle:
-                    # Set splunkd port
-                    ansible_vars["splunkd_port"] = splunkd_port
                     await run_ansible_playbook(
                         stack_id=stack_id,
                         playbook_name="apply_shc_bundle.yml",
@@ -1716,7 +1722,6 @@ async def install_splunk_app(
     stack_id: str,
     splunk_username: str = Body(..., embed=True),
     splunk_password: str = Body(..., embed=True),
-    splunkd_port: Optional[int] = Body(8089, embed=True),  # Default to 8089
     splunkbase_username: str = Body(..., embed=True),
     splunkbase_password: str = Body(..., embed=True),
     splunkbase_app_id: str = Body(..., embed=True),
@@ -1813,7 +1818,6 @@ async def install_splunk_app(
                 ansible_vars = {
                     "shc_deployer_node": stack_details["shc_deployer_node"],
                     "shc_members": stack_details["shc_members"],
-                    "splunkd_port": splunkd_port,
                 }
                 await run_ansible_playbook(
                     stack_id,
@@ -1847,7 +1851,6 @@ async def batch_install_apps(
     stack_id: str,
     splunk_username: str = Body(...),
     splunk_password: str = Body(...),
-    splunkd_port: Optional[int] = Body(8089, embed=True),  # Default to 8089
     splunkbase_username: str = Body(...),
     splunkbase_password: str = Body(...),
     apply_shc_bundle: bool = Body(...),  # Optional parameter
@@ -1930,7 +1933,6 @@ async def batch_install_apps(
             ansible_vars = {
                 "shc_deployer_node": stack_details["shc_deployer_node"],
                 "shc_members": stack_details["shc_members"],
-                "splunkd_port": splunkd_port,
             }
             await run_ansible_playbook(
                 stack_id,
@@ -1963,7 +1965,6 @@ async def delete_splunk_app(
     ),
     splunk_username: str = Query(..., description="Splunk admin username"),
     splunk_password: str = Query(..., description="Splunk admin password"),
-    splunkd_port: Optional[int] = Body(8089, embed=True),  # Default to 8089
     apply_shc_bundle: bool = Query(
         True, description="Whether to apply the SHC bundle after deletion"
     ),  # Optional parameter
@@ -2016,7 +2017,6 @@ async def delete_splunk_app(
                 ansible_vars = {
                     "shc_deployer_node": stack_details["shc_deployer_node"],
                     "shc_members": stack_details["shc_members"],
-                    "splunkd_port": splunkd_port,
                 }
                 await run_ansible_playbook(
                     stack_id,
@@ -2069,7 +2069,6 @@ async def install_private_app(
     app_name: str = Body(..., embed=True),  # Name of the private app
     splunk_username: str = Body(..., embed=True),
     splunk_password: str = Body(..., embed=True),
-    splunkd_port: Optional[int] = Body(8089, embed=True),  # Default to 8089
     target: Optional[str] = Body(None, embed=True),  # Target for distributed stacks
     apply_shc_bundle: bool = Body(True, embed=True),  # Optional SHC bundle application
 ):
@@ -2128,7 +2127,6 @@ async def install_private_app(
                 ansible_vars={
                     "shc_deployer_node": stack_details["shc_deployer_node"],
                     "shc_members": stack_details["shc_members"],
-                    "splunkd_port": splunkd_port,
                 },
                 limit=stack_details["shc_deployer_node"],
                 creds={"username": splunk_username, "password": splunk_password},
@@ -2160,7 +2158,6 @@ async def remove_private_app(
     app_name: str = Query(...),  # Name of the private app
     splunk_username: str = Query(...),
     splunk_password: str = Query(...),
-    splunkd_port: Optional[int] = Body(8089, embed=True),  # Default to 8089
     target: Optional[str] = Query(None),  # Target for distributed stacks
     apply_shc_bundle: bool = Query(True),  # Optional SHC bundle application
 ):
@@ -2206,7 +2203,6 @@ async def remove_private_app(
                 ansible_vars={
                     "shc_deployer_node": stack_details["shc_deployer_node"],
                     "shc_members": stack_details["shc_members"],
-                    "splunkd_port": splunkd_port,
                 },
                 limit=stack_details["shc_deployer_node"],
                 creds={"username": splunk_username, "password": splunk_password},
@@ -2238,7 +2234,6 @@ async def shc_rolling_restart(
     stack_id: str,
     splunk_username: str = Body(..., embed=True),
     splunk_password: str = Body(..., embed=True),
-    splunkd_port: Optional[int] = Body(8089, embed=True),  # Default to 8089
 ):
     try:
         # Retrieve stack details from Redis
@@ -2255,7 +2250,6 @@ async def shc_rolling_restart(
         ansible_vars = {
             "shc_deployer_node": stack_details["shc_deployer_node"],
             "shc_members": stack_details["shc_members"],
-            "splunkd_port": splunkd_port,
         }
 
         # Trigger Rolling Restart via Ansible playbook
@@ -2355,7 +2349,6 @@ HTTP Method: POST
 async def restart_splunk(
     stack_id: str,
     limit: Optional[str] = Body(None, embed=True),  # Optional limit parameter
-    splunkd_port: Optional[int] = Body(8089, embed=True),  # Default to 8089
     splunk_service_name: Optional[str] = Body(
         "splunk", embed=True
     ),  # Default to splunk
@@ -2374,7 +2367,6 @@ async def restart_splunk(
     # Prepare Ansible variables
     ansible_vars = {
         "splunk_service_name": splunk_service_name,
-        "splunkd_port": splunkd_port,
     }
 
     # Parse and validate the limit parameter
@@ -2483,7 +2475,6 @@ async def apply_shc_bundle(
     stack_id: str,
     splunk_username: str = Body(..., embed=True),
     splunk_password: str = Body(..., embed=True),
-    splunkd_port: Optional[int] = Body(8089, embed=True),  # Default to 8089
 ):
     """
     Apply SHC bundle on a deployer node.
@@ -2515,7 +2506,6 @@ async def apply_shc_bundle(
         ansible_vars = {
             "shc_deployer_node": shc_deployer_node,
             "shc_members": stack_metadata.get("shc_members", "").split(","),
-            "splunkd_port": splunkd_port,
         }
 
         # Run the Ansible playbook to apply the SHC bundle

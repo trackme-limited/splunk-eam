@@ -3,6 +3,10 @@
   hosts: all
   become: yes
   vars:
+    splunk_home: "{{ splunk_home | default('/opt/splunk') }}"
+    splunkd_port: "{{ splunkd_port | default(8089) }}"
+    splunk_user: "{{ splunk_user | default('splunk') }}"
+    splunk_group: "{{ splunk_group | default('splunk') }}"
     index_name: ""
     file_path: ""
   tasks:
@@ -10,8 +14,8 @@
       file:
         path: "{{ file_path }}"
         state: touch
-        owner: splunk
-        group: splunk
+        owner: "{{ splunk_user }}"
+        group: "{{ splunk_group }}"
         mode: "0644"
 
     - name: Remove index stanza
@@ -19,6 +23,6 @@
         path: "{{ file_path }}"
         section: "{{ index_name }}"
         state: absent
-        owner: splunk
-        group: splunk
+        owner: "{{ splunk_user }}"
+        group: "{{ splunk_group }}"
         mode: "0644"

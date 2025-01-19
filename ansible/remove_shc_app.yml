@@ -3,7 +3,10 @@
   hosts: all
   become: yes
   vars:
-    splunk_home: "/opt/splunk"
+    splunk_home: "{{ splunk_home | default('/opt/splunk') }}"
+    splunkd_port: "{{ splunkd_port | default(8089) }}"
+    splunk_user: "{{ splunk_user | default('splunk') }}"
+    splunk_group: "{{ splunk_group | default('splunk') }}"
     splunk_app_name: ""
     app_destination: "/opt/splunk/etc/shcluster/apps"
 

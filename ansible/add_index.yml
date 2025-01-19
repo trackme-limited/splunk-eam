@@ -3,6 +3,10 @@
   hosts: all
   become: yes
   vars:
+    splunk_home: "{{ splunk_home | default('/opt/splunk') }}"
+    splunkd_port: "{{ splunkd_port | default(8089) }}"
+    splunk_user: "{{ splunk_user | default('splunk') }}"
+    splunk_group: "{{ splunk_group | default('splunk') }}"
     index_name: ""
     maxDataSizeMB: ""
     datatype: ""
@@ -12,16 +16,16 @@
       file:
         path: "{{ file_path | dirname }}"
         state: directory
-        owner: splunk
-        group: splunk
+        owner: "{{ splunk_user }}"
+        group: "{{ splunk_group }}"
         mode: "0755"
 
     - name: Ensure indexes.conf file exists
       file:
         path: "{{ file_path }}"
         state: touch
-        owner: splunk
-        group: splunk
+        owner: "{{ splunk_user }}"
+        group: "{{ splunk_group }}"
         mode: "0644"
 
     - name: Add or update index stanza (maxDataSizeMB)
@@ -31,8 +35,8 @@
         option: maxDataSizeMB
         value: "{{ maxDataSizeMB }}"
         state: present
-        owner: splunk
-        group: splunk
+        owner: "{{ splunk_user }}"
+        group: "{{ splunk_group }}"
         mode: "0644"
 
     - name: Add or update index stanza (datatype)
@@ -42,6 +46,6 @@
         option: datatype
         value: "{{ datatype }}"
         state: present
-        owner: splunk
-        group: splunk
+        owner: "{{ splunk_user }}"
+        group: "{{ splunk_group }}"
         mode: "0644"

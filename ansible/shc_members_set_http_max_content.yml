@@ -3,23 +3,27 @@
   hosts: all
   become: yes
   vars:
+    splunk_home: "{{ splunk_home | default('/opt/splunk') }}"
+    splunkd_port: "{{ splunkd_port | default(8089) }}"
+    splunk_user: "{{ splunk_user | default('splunk') }}"
+    splunk_group: "{{ splunk_group | default('splunk') }}"
     http_max_content_length: 5000000000 # Default to 5GB
-    file_path: "/opt/splunk/etc/system/local/server.conf"
+    file_path: "{{ splunk_home }}/etc/system/local/server.conf"
   tasks:
     - name: Ensure directory exists for server.conf
       file:
         path: "{{ file_path | dirname }}"
         state: directory
-        owner: splunk
-        group: splunk
+        owner: "{{ splunk_user }}"
+        group: "{{ splunk_group }}"
         mode: "0755"
 
     - name: Ensure server.conf file exists
       file:
         path: "{{ file_path }}"
         state: touch
-        owner: splunk
-        group: splunk
+        owner: "{{ splunk_user }}"
+        group: "{{ splunk_group }}"
         mode: "0644"
 
     - name: Set HTTP Max Content Length in server.conf
@@ -29,6 +33,6 @@
         option: "max_content_length"
         value: "{{ http_max_content_length }}"
         state: present
-        owner: splunk
-        group: splunk
+        owner: "{{ splunk_user }}"
+        group: "{{ splunk_group }}"
         mode: "0644"

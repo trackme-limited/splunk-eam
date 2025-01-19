@@ -3,6 +3,10 @@
   hosts: all
   become: yes
   vars:
+    splunk_home: "{{ splunk_home | default('/opt/splunk') }}"
+    splunkd_port: "{{ splunkd_port | default(8089) }}"
+    splunk_user: "{{ splunk_user | default('splunk') }}"
+    splunk_group: "{{ splunk_group | default('splunk') }}"
     indexes: [] # List of indexes to create
     file_path: "" # Path to indexes.conf
   tasks:
@@ -10,16 +14,16 @@
       file:
         path: "{{ file_path | dirname }}"
         state: directory
-        owner: splunk
-        group: splunk
+        owner: "{{ splunk_user }}"
+        group: "{{ splunk_group }}"
         mode: "0755"
 
     - name: Ensure indexes.conf file exists
       file:
         path: "{{ file_path }}"
         state: touch
-        owner: splunk
-        group: splunk
+        owner: "{{ splunk_user }}"
+        group: "{{ splunk_group }}"
         mode: "0644"
 
     - name: Add or update index stanzas
@@ -29,8 +33,8 @@
         option: "{{ item.1.option }}" # Extract individual option
         value: "{{ item.1.value }}" # Extract value
         state: present
-        owner: splunk
-        group: splunk
+        owner: "{{ splunk_user }}"
+        group: "{{ splunk_group }}"
         mode: "0644"
       loop: "{{ indexes | subelements('options') }}"
       loop_control:
