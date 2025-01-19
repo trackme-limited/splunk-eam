@@ -34,11 +34,11 @@ Splunk AEM provides a RESTful API to manage Splunk Enterprise environments:
 
 ### Requirements
 
-- Docker or other container engine compatible with Docker such as Podman
-- An SSH private key to access the Splunk Enterprise environments, the user should be able to run sudo commands with no password.
-- An Ansible inventory file with the Splunk Enterprise environments to manage. (example provided in this documentation)
+#### Docker
 
-### Pull the Docker image
+- Docker or other container engine compatible with Docker such as Podman
+
+##### Pull the Docker image
 
 **You can find the release of Splunk EAM in DockerHub:**
 
@@ -48,6 +48,35 @@ Splunk AEM provides a RESTful API to manage Splunk Enterprise environments:
 
 ```shell
     docker pull trackmelimited/splunk-eam:latest
+```
+
+#### Operating System & Ansible
+
+- An SSH private key to access the Splunk Enterprise environments, the user should be able to run sudo commands with no password.
+- An Ansible inventory file with the Splunk Enterprise environments to manage. (example provided in this documentation)
+
+#### Splunk Configuration
+
+For building Splunk environments automatically, we recommend considerating the use of Splunk Automator:
+
+- [Splunk Automator](https://github.com/splunk/splunk-platform-automator)
+
+For indexes management, your Splunk base configuration application must reference proper indexes default, such as:
+
+```shell
+[default]
+homePath = volume:primary/$_index_name/db
+coldPath = volume:primary/$_index_name/colddb
+thawedPath = $SPLUNK_DB/$_index_name/thaweddb
+```
+
+So that when defining indexes, these basis parameters do not need to be defined, and only needed parameters are:
+
+```shell
+[test_metrics]
+datatype = event|metric (which is optional and defaults to event)
+maxDataSizeMB = 5000
+searchableDays = 90
 ```
 
 ### Installation
@@ -668,7 +697,7 @@ You can then create your own endpoint using FastApi routing capabilities, the fo
 
 Handle both the Python file(s) and Ansible playbook(s) and restart the Docker container, the endpoints should be now available and ready to be used.
 
-### Using the API
+### Splunk EAM API reference
 
 #### GET /docs/endpoints
 
@@ -809,6 +838,30 @@ Retrieve all stacks.
     -H "Authorization: Bearer $token"
 ```
 
+Request Parameters:
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| None      | N/A  | ❌ No    | This endpoint does not require any parameters. |
+
+Example response:
+
+```json
+    {
+        "stacks": {
+            "stack_001": {
+                "enterprise_deployment_type": "standalone",
+                "shc_cluster": false
+            },
+            "stack_002": {
+                "enterprise_deployment_type": "distributed",
+                "shc_cluster": true,
+                "shc_deployer_node": "shc_deployer"
+            }
+        }
+    }
+```
+
 #### GET /stacks/{stack_id}
 
 Retrieve details of a specific stack.
@@ -816,6 +869,30 @@ Retrieve details of a specific stack.
 ```shell
     curl -k -X GET https://localhost:8443/stacks/stack_001 \
     -H "Authorization: Bearer $token"
+```
+
+Request Parameters:
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| None      | N/A  | ❌ No    | This endpoint does not require any parameters. |
+
+Example response:
+
+```json
+    {
+        "stacks": {
+            "stack_001": {
+                "enterprise_deployment_type": "standalone",
+                "shc_cluster": false
+            },
+            "stack_002": {
+                "enterprise_deployment_type": "distributed",
+                "shc_cluster": true,
+                "shc_deployer_node": "shc_deployer"
+            }
+        }
+    }
 ```
 
 #### DELETE /stacks/{stack_id}
@@ -894,6 +971,21 @@ Retrieve the Ansible inventory for a stack.
 ```shell
     curl -k -X GET https://localhost:8443/stacks/stack_001/inventory \
     -H "Authorization: Bearer $token"
+```
+
+Request Parameters:
+
+| Parameter   | Type   | Required | Description |
+|-------------|--------|----------|-------------|
+| `stack_id`  | String | ✅ Yes   | The unique ID of the stack whose inventory is to be retrieved. |
+
+Example response:
+
+```json
+    {
+        "stack_id": "stack_001",
+        "inventory": "[splunk_servers]\nsplunk01 ansible_host=192.168.1.10\nsplunk02 ansible_host=192.168.1.11"
+    }
 ```
 
 #### POST /stacks/{stack_id}/ssh_key
