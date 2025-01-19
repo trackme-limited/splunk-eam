@@ -1470,6 +1470,8 @@ async def batch_add_indexes(
             )
 
         if stack_metadata.get("shc_cluster", "false").lower() == "true":
+            ansible_vars["shc_deployer_node"] = stack_details["shc_deployer_node"]
+            ansible_vars["shc_members"] = stack_details["shc_members"]
             ansible_vars["file_path"] = (
                 "/opt/splunk/etc/shcluster/apps/001_splunk_aem/local/indexes.conf"
             )
